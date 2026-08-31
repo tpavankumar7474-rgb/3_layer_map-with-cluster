@@ -1,0 +1,3520 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<meta charset="utf-8">
+
+<title>Municipality Incident Heat Map</title>
+
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+/>
+
+<!-- =====================================================
+     LEAFLET
+     ===================================================== -->
+
+<link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+/>
+
+
+<!-- =====================================================
+     LAYER TREE
+     ===================================================== -->
+
+<link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet.control.layers.tree@1.1.0/L.Control.Layers.Tree.css"
+/>
+
+
+<style>
+
+/* =====================================================
+   PAGE
+   ===================================================== */
+
+html,
+body {
+
+    margin: 0;
+    padding: 0;
+
+    width: 100%;
+    height: 100%;
+
+}
+
+
+#map {
+
+    width: 100%;
+    height: 100vh;
+
+}
+
+
+/* =====================================================
+   LAYER CONTROL
+   ===================================================== */
+
+.leaflet-control-layers {
+
+    max-height: 85vh;
+
+    overflow-y: auto;
+
+    font-size: 13px;
+
+}
+
+
+/* =====================================================
+   COUNT LABEL
+   ===================================================== */
+
+.count-label {
+
+    background: transparent;
+
+    border: none;
+
+}
+
+
+.count-text {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    min-width: 38px;
+
+    height: 26px;
+
+    padding: 0 7px;
+
+    box-sizing: border-box;
+
+    background: rgba(255,255,255,0.92);
+
+    border: 2px solid #111;
+
+    border-radius: 14px;
+
+    color: #111;
+
+    font-size: 15px;
+
+    font-weight: 800;
+
+    line-height: 1;
+
+    white-space: nowrap;
+
+    text-align: center;
+
+    box-shadow:
+
+        0 1px 4px rgba(0,0,0,0.45),
+
+        0 0 3px rgba(255,255,255,0.9);
+
+}
+
+
+/* =====================================================
+   HIGH VALUE COUNT
+   ===================================================== */
+
+.count-label.high-count .count-text {
+
+    background: #dc2626;
+
+    color: white;
+
+    border-color: white;
+
+}
+
+
+/* =====================================================
+   MEDIUM VALUE COUNT
+   ===================================================== */
+
+.count-label.medium-count .count-text {
+
+    background: #facc15;
+
+    color: #111;
+
+    border-color: #111;
+
+}
+
+
+/* =====================================================
+   LOW VALUE COUNT
+   ===================================================== */
+
+.count-label.low-count .count-text {
+
+    background: #16a34a;
+
+    color: white;
+
+    border-color: white;
+
+}
+
+
+/* =====================================================
+   DYNAMIC LOCATION
+   ===================================================== */
+
+.dynamic-location-marker {
+
+    background: transparent;
+
+    border: none;
+
+}
+
+
+.dynamic-location-marker .count-text {
+
+    min-width: 44px;
+
+    height: 28px;
+
+    font-size: 15px;
+
+}
+
+
+/* =====================================================
+   TOOLTIP
+   ===================================================== */
+
+.leaflet-tooltip.custom-tooltip {
+
+    background: rgba(255,255,255,0.97);
+
+    border: 1px solid #222;
+
+    border-radius: 7px;
+
+    box-shadow:
+
+        0 2px 10px rgba(0,0,0,0.3);
+
+    color: #111;
+
+    padding: 7px 9px;
+
+    font-size: 13px;
+
+    line-height: 1.55;
+
+}
+
+
+/* =====================================================
+   HEATMAP LEGEND
+   ===================================================== */
+
+.heat-legend {
+
+    background: rgba(255,255,255,0.96);
+
+    border: 1px solid #333;
+
+    border-radius: 9px;
+
+    padding: 9px 12px;
+
+    box-shadow:
+
+        0 2px 8px rgba(0,0,0,0.28);
+
+    color: #111;
+
+    font-size: 12px;
+
+    min-width: 210px;
+
+}
+
+
+.heat-legend-title {
+
+    font-weight: 800;
+
+    font-size: 13px;
+
+    text-align: center;
+
+    margin-bottom: 7px;
+
+}
+
+
+.heat-gradient {
+
+    height: 13px;
+
+    border-radius: 7px;
+
+    border: 1px solid #555;
+
+    background:
+
+        linear-gradient(
+
+            to right,
+
+            #2563eb 0%,
+
+            #06b6d4 20%,
+
+            #22c55e 40%,
+
+            #facc15 65%,
+
+            #f97316 82%,
+
+            #dc2626 100%
+
+        );
+
+}
+
+
+.heat-legend-labels {
+
+    display: flex;
+
+    justify-content: space-between;
+
+    margin-top: 4px;
+
+    font-size: 11px;
+
+    font-weight: 600;
+
+}
+
+
+/* =====================================================
+   TITLE
+   ===================================================== */
+
+.map-title {
+
+    position: absolute;
+
+    top: 10px;
+
+    left: 50%;
+
+    transform: translateX(-50%);
+
+    z-index: 9999;
+
+    background: rgba(255,255,255,0.94);
+
+    border: 1px solid #333;
+
+    border-radius: 8px;
+
+    padding: 7px 18px;
+
+    font-size: 14px;
+
+    font-weight: 800;
+
+    color: #111;
+
+    box-shadow:
+
+        0 2px 7px rgba(0,0,0,0.25);
+
+    pointer-events: none;
+
+}
+
+
+/* =====================================================
+   HEATMAP INFO
+   ===================================================== */
+
+.heat-info {
+
+    position: absolute;
+
+    top: 52px;
+
+    left: 50%;
+
+    transform: translateX(-50%);
+
+    z-index: 9998;
+
+    background: rgba(255,255,255,0.88);
+
+    border-radius: 6px;
+
+    padding: 4px 10px;
+
+    font-size: 11px;
+
+    color: #333;
+
+    pointer-events: none;
+
+}
+
+
+/* =====================================================
+   MOBILE
+   ===================================================== */
+
+@media(max-width:600px) {
+
+    .map-title {
+
+        font-size: 12px;
+
+        padding: 6px 12px;
+
+    }
+
+
+    .heat-legend {
+
+        min-width: 180px;
+
+        font-size: 11px;
+
+    }
+
+}
+
+</style>
+
+</head>
+
+
+<body>
+
+
+<div id="map"></div>
+
+
+<div class="map-title">
+    Incident Heat Map
+</div>
+
+
+<div class="heat-info">
+    Blue = Low &nbsp; → &nbsp; Red = High
+</div>
+
+
+<!-- =====================================================
+     LEAFLET
+     ===================================================== -->
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+
+<!-- =====================================================
+     LEAFLET HEAT
+     ===================================================== -->
+
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+
+
+<!-- =====================================================
+     LAYER TREE
+     ===================================================== -->
+
+<script src="https://unpkg.com/leaflet.control.layers.tree@1.1.0/L.Control.Layers.Tree.js"></script>
+
+
+<script>
+
+
+// =====================================================
+// MAP
+// =====================================================
+
+const map = L.map("map", {
+
+    maxZoom: 18
+
+});
+
+
+// =====================================================
+// OPEN STREET MAP
+// =====================================================
+
+const osm = L.tileLayer(
+
+    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+
+    {
+
+        attribution:
+            "&copy; OpenStreetMap contributors",
+
+        maxZoom: 19
+
+    }
+
+).addTo(map);
+
+
+// =====================================================
+// COLORS
+// =====================================================
+
+const municipalityColors = {
+
+    "Dammam": "#2563eb",
+
+    "Dhahran": "#16a34a",
+
+    "Khobar": "#dc2626"
+
+};
+
+
+// =====================================================
+// DATA STORES
+// =====================================================
+
+const districtCounts = {};
+
+const districtToCity = {};
+
+const districtLayers = {};
+
+const municipalityBoundaryLayers = {};
+
+const municipalityCenters = {};
+
+const districtMarkers = {};
+
+const municipalityMarkers = {};
+
+const dynamicLocationMarkers = {};
+
+
+// =====================================================
+// MUNICIPALITY TOTALS
+// =====================================================
+
+const municipalityTotals = {
+
+    Dammam: 0,
+
+    Dhahran: 0,
+
+    Khobar: 0
+
+};
+
+
+// =====================================================
+// RISK
+// =====================================================
+
+const municipalityRiskStats = {
+
+    Dammam: {
+
+        min: 0,
+        max: 0,
+        lowLimit: 0,
+        highLimit: 0
+
+    },
+
+    Dhahran: {
+
+        min: 0,
+        max: 0,
+        lowLimit: 0,
+        highLimit: 0
+
+    },
+
+    Khobar: {
+
+        min: 0,
+        max: 0,
+        lowLimit: 0,
+        highLimit: 0
+
+    }
+
+};
+
+
+// =====================================================
+// HEATMAP
+// =====================================================
+
+let incidentHeatLayer = null;
+
+let latestHeatPoints = [];
+
+let latestMaxCount = 0;
+
+
+// =====================================================
+// STATE
+// =====================================================
+
+let mapReady = false;
+
+let pendingIncidentData = null;
+
+let refreshTimer = null;
+
+
+// =====================================================
+// REFRESH
+// =====================================================
+
+function scheduleRefresh() {
+
+    if (refreshTimer) {
+
+        clearTimeout(refreshTimer);
+
+    }
+
+
+    refreshTimer = setTimeout(() => {
+
+        refreshTimer = null;
+
+        refreshCounts();
+
+    }, 100);
+
+}
+
+
+// =====================================================
+// COUNT ICON
+// =====================================================
+
+function makeCountIcon(
+
+    text,
+
+    width = 55,
+
+    anchorX = 27,
+
+    riskClass = ""
+
+) {
+
+    return L.divIcon({
+
+        className:
+
+            `count-label ${riskClass}`,
+
+        html:
+
+            `<div class="count-text">${text}</div>`,
+
+        iconSize: [
+
+            width,
+
+            30
+
+        ],
+
+        iconAnchor: [
+
+            anchorX,
+
+            15
+
+        ]
+
+    });
+
+}
+
+
+// =====================================================
+// DYNAMIC ICON
+// =====================================================
+
+function makeDynamicLocationIcon(
+
+    text,
+
+    riskClass = ""
+
+) {
+
+    return L.divIcon({
+
+        className:
+
+            `dynamic-location-marker ${riskClass}`,
+
+        html:
+
+            `<div class="count-text">${text}</div>`,
+
+        iconSize: [
+
+            70,
+
+            30
+
+        ],
+
+        iconAnchor: [
+
+            35,
+
+            15
+
+        ]
+
+    });
+
+}
+
+
+// =====================================================
+// DISTRICT COUNT
+// =====================================================
+
+function getDistrictCount(name) {
+
+    return Number(
+
+        districtCounts[name]?.count || 0
+
+    );
+
+}
+
+
+// =====================================================
+// RISK STATISTICS
+// =====================================================
+
+function calculateMunicipalityRiskStats() {
+
+    [
+
+        "Dammam",
+
+        "Dhahran",
+
+        "Khobar"
+
+    ].forEach(city => {
+
+        const values = Object.keys(
+
+            districtToCity
+
+        )
+
+        .filter(name =>
+
+            districtToCity[name] === city
+
+        )
+
+        .map(name =>
+
+            getDistrictCount(name)
+
+        )
+
+        .filter(v => v > 0);
+
+
+        if (!values.length) {
+
+            municipalityRiskStats[city] = {
+
+                min: 0,
+
+                max: 0,
+
+                lowLimit: 0,
+
+                highLimit: 0
+
+            };
+
+            return;
+
+        }
+
+
+        const min = Math.min(...values);
+
+        const max = Math.max(...values);
+
+        const range = max - min;
+
+
+        municipalityRiskStats[city] = {
+
+            min,
+
+            max,
+
+            lowLimit:
+
+                min + range * 0.33,
+
+            highLimit:
+
+                min + range * 0.66
+
+        };
+
+    });
+
+}
+
+
+// =====================================================
+// RISK
+// =====================================================
+
+function getRiskLevel(
+
+    count,
+
+    city
+
+) {
+
+    count = Number(count || 0);
+
+
+    if (count <= 0) {
+
+        return {
+
+            level: "No Data",
+
+            color: "#64748b",
+
+            className: ""
+
+        };
+
+    }
+
+
+    const stats =
+
+        municipalityRiskStats[city];
+
+
+    if (!stats || stats.max === 0) {
+
+        return {
+
+            level: "No Data",
+
+            color: "#64748b",
+
+            className: ""
+
+        };
+
+    }
+
+
+    if (stats.max === stats.min) {
+
+        return {
+
+            level: "High Risk",
+
+            color: "#dc2626",
+
+            className: "high-count"
+
+        };
+
+    }
+
+
+    if (count >= stats.highLimit) {
+
+        return {
+
+            level: "High Risk",
+
+            color: "#dc2626",
+
+            className: "high-count"
+
+        };
+
+    }
+
+
+    if (count >= stats.lowLimit) {
+
+        return {
+
+            level: "Medium Risk",
+
+            color: "#facc15",
+
+            className: "medium-count"
+
+        };
+
+    }
+
+
+    return {
+
+        level: "Low Risk",
+
+        color: "#16a34a",
+
+        className: "low-count"
+
+    };
+
+}
+
+
+// =====================================================
+// DISTRICT COLOR
+// =====================================================
+
+function getDistrictFillColor(name) {
+
+    const count =
+
+        getDistrictCount(name);
+
+    const city =
+
+        districtToCity[name];
+
+    return getRiskLevel(
+
+        count,
+
+        city
+
+    ).color;
+
+}
+
+
+// =====================================================
+// MUNICIPALITY STYLE
+// =====================================================
+
+function boundaryStyle(city) {
+
+    return {
+
+        color: "#111827",
+
+        fillColor:
+
+            municipalityColors[city],
+
+        weight: 3,
+
+        opacity: 0.95,
+
+        fillOpacity: 0.04
+
+    };
+
+}
+
+
+// =====================================================
+// DISTRICT STYLE
+//
+// IMPORTANT:
+// Very low fill opacity.
+// Heatmap remains visible.
+// =====================================================
+
+function districtStyle(
+
+    city,
+
+    districtName = ""
+
+) {
+
+    const risk =
+
+        getRiskLevel(
+
+            getDistrictCount(
+
+                districtName
+
+            ),
+
+            city
+
+        );
+
+
+    return {
+
+        color: "#111827",
+
+        weight: 1.8,
+
+        opacity: 0.9,
+
+        fillColor:
+
+            risk.color,
+
+        fillOpacity: 0.10
+
+    };
+
+}
+
+
+// =====================================================
+// TOOLTIP
+// =====================================================
+
+function districtTooltipHtml(name) {
+
+    const city =
+
+        districtToCity[name] || "";
+
+
+    const count =
+
+        getDistrictCount(name);
+
+
+    const risk =
+
+        getRiskLevel(
+
+            count,
+
+            city
+
+        );
+
+
+    return `
+
+        <div>
+
+            <b>District:</b>
+            ${name}
+
+            <br>
+
+            <b>Municipality:</b>
+            ${city}
+
+            <br>
+
+            <b>Incidents:</b>
+            ${count.toLocaleString()}
+
+            <br>
+
+            <b>Risk:</b>
+            ${risk.level}
+
+        </div>
+
+    `;
+
+}
+
+
+// =====================================================
+// MUNICIPALITY TOOLTIP
+// =====================================================
+
+function municipalityTooltipHtml(city) {
+
+    const total =
+
+        municipalityTotals[city] || 0;
+
+
+    return `
+
+        <div>
+
+            <b>Municipality:</b>
+            ${city}
+
+            <br>
+
+            <b>Total Incidents:</b>
+            ${total.toLocaleString()}
+
+        </div>
+
+    `;
+
+}
+
+
+// =====================================================
+// TOOLTIP UPDATE
+// =====================================================
+
+function bindOrUpdateTooltip(
+
+    layer,
+
+    html
+
+) {
+
+    if (layer.getTooltip()) {
+
+        layer.setTooltipContent(html);
+
+    } else {
+
+        layer.bindTooltip(
+
+            html,
+
+            {
+
+                sticky: true,
+
+                direction: "top",
+
+                opacity: 0.95,
+
+                className:
+                    "custom-tooltip"
+
+            }
+
+        );
+
+    }
+
+}
+
+
+// =====================================================
+// DISTRICT MARKER
+// =====================================================
+
+function updateDistrictMarker(
+
+    name,
+
+    lat,
+
+    long,
+
+    count
+
+) {
+
+    if (
+
+        lat == null ||
+
+        long == null ||
+
+        isNaN(lat) ||
+
+        isNaN(long)
+
+    ) {
+
+        return;
+
+    }
+
+
+    lat = Number(lat);
+
+    long = Number(long);
+
+    count = Number(count || 0);
+
+
+    const city =
+
+        districtToCity[name];
+
+
+    const risk =
+
+        getRiskLevel(
+
+            count,
+
+            city
+
+        );
+
+
+    if (!districtMarkers[name]) {
+
+        districtMarkers[name] =
+
+            L.marker(
+
+                [lat, long],
+
+                {
+
+                    icon:
+
+                        makeCountIcon(
+
+                            count.toLocaleString(),
+
+                            65,
+
+                            32,
+
+                            risk.className
+
+                        ),
+
+                    zIndexOffset: 1000
+
+                }
+
+            );
+
+
+        districtMarkers[name]._lastCount =
+
+            count;
+
+    } else {
+
+        districtMarkers[name]
+
+            .setLatLng([lat, long]);
+
+
+        if (
+
+            districtMarkers[name]._lastCount !==
+
+            count
+
+        ) {
+
+            districtMarkers[name]
+
+                .setIcon(
+
+                    makeCountIcon(
+
+                        count.toLocaleString(),
+
+                        65,
+
+                        32,
+
+                        risk.className
+
+                    )
+
+                );
+
+
+            districtMarkers[name]._lastCount =
+
+                count;
+
+        }
+
+    }
+
+
+    if (
+
+        !map.hasLayer(
+
+            districtMarkers[name]
+
+        )
+
+    ) {
+
+        districtMarkers[name].addTo(map);
+
+    }
+
+}
+
+
+// =====================================================
+// MUNICIPALITY MARKER
+// =====================================================
+
+function updateMunicipalityMarker(
+
+    city,
+
+    lat,
+
+    long,
+
+    count
+
+) {
+
+    if (
+
+        lat == null ||
+
+        long == null ||
+
+        isNaN(lat) ||
+
+        isNaN(long)
+
+    ) {
+
+        return;
+
+    }
+
+
+    lat = Number(lat);
+
+    long = Number(long);
+
+    count = Number(count || 0);
+
+
+    if (!municipalityMarkers[city]) {
+
+        municipalityMarkers[city] =
+
+            L.marker(
+
+                [lat, long],
+
+                {
+
+                    icon:
+
+                        makeCountIcon(
+
+                            count.toLocaleString(),
+
+                            75,
+
+                            37,
+
+                            ""
+
+                        ),
+
+                    zIndexOffset: 1000
+
+                }
+
+            );
+
+
+        municipalityMarkers[city]._lastCount =
+
+            count;
+
+    } else {
+
+        municipalityMarkers[city]
+
+            .setLatLng([lat, long]);
+
+
+        if (
+
+            municipalityMarkers[city]._lastCount !==
+
+            count
+
+        ) {
+
+            municipalityMarkers[city]
+
+                .setIcon(
+
+                    makeCountIcon(
+
+                        count.toLocaleString(),
+
+                        75,
+
+                        37,
+
+                        ""
+
+                    )
+
+                );
+
+
+            municipalityMarkers[city]._lastCount =
+
+                count;
+
+        }
+
+    }
+
+
+    if (
+
+        !map.hasLayer(
+
+            municipalityMarkers[city]
+
+        )
+
+    ) {
+
+        municipalityMarkers[city].addTo(map);
+
+    }
+
+}
+
+
+// =====================================================
+// DYNAMIC LOCATION MARKER
+// =====================================================
+
+function updateDynamicLocationMarker(
+
+    name,
+
+    lat,
+
+    long,
+
+    count
+
+) {
+
+    if (
+
+        !name ||
+
+        lat == null ||
+
+        long == null ||
+
+        isNaN(lat) ||
+
+        isNaN(long)
+
+    ) {
+
+        return;
+
+    }
+
+
+    lat = Number(lat);
+
+    long = Number(long);
+
+    count = Number(count || 0);
+
+
+    const markerKey =
+
+        `${name}_${lat}_${long}`;
+
+
+    const riskClass =
+
+        count >= latestMaxCount * 0.66
+
+            ? "high-count"
+
+            : count >= latestMaxCount * 0.33
+
+                ? "medium-count"
+
+                : "low-count";
+
+
+    if (
+
+        !dynamicLocationMarkers[markerKey]
+
+    ) {
+
+        const marker =
+
+            L.marker(
+
+                [lat, long],
+
+                {
+
+                    icon:
+
+                        makeDynamicLocationIcon(
+
+                            count.toLocaleString(),
+
+                            riskClass
+
+                        ),
+
+                    zIndexOffset: 1100
+
+                }
+
+            );
+
+
+        marker._lastCount = count;
+
+
+        marker.bindTooltip(
+
+            `
+
+            <div>
+
+                <b>Location:</b>
+                ${name}
+
+                <br>
+
+                <b>Incidents:</b>
+                ${count.toLocaleString()}
+
+                <br>
+
+                <b>Latitude:</b>
+                ${lat.toFixed(6)}
+
+                <br>
+
+                <b>Longitude:</b>
+                ${long.toFixed(6)}
+
+            </div>
+
+            `,
+
+            {
+
+                sticky: true,
+
+                direction: "top",
+
+                opacity: 0.95,
+
+                className:
+                    "custom-tooltip"
+
+            }
+
+        );
+
+
+        marker.on(
+
+            "click",
+
+            function() {
+
+                window.parent.postMessage(
+
+                    {
+
+                        type:
+                            "mapClick",
+
+                        state:
+                            name,
+
+                        lat:
+                            lat,
+
+                        long:
+                            long
+
+                    },
+
+                    "*"
+
+                );
+
+            }
+
+        );
+
+
+        dynamicLocationMarkers[markerKey] =
+
+            marker;
+
+    } else {
+
+        const marker =
+
+            dynamicLocationMarkers[markerKey];
+
+
+        marker.setLatLng([lat, long]);
+
+
+        if (
+
+            marker._lastCount !== count
+
+        ) {
+
+            marker.setIcon(
+
+                makeDynamicLocationIcon(
+
+                    count.toLocaleString(),
+
+                    riskClass
+
+                )
+
+            );
+
+            marker._lastCount = count;
+
+        }
+
+
+        marker.setTooltipContent(
+
+            `
+
+            <div>
+
+                <b>Location:</b>
+                ${name}
+
+                <br>
+
+                <b>Incidents:</b>
+                ${count.toLocaleString()}
+
+                <br>
+
+                <b>Latitude:</b>
+                ${lat.toFixed(6)}
+
+                <br>
+
+                <b>Longitude:</b>
+                ${long.toFixed(6)}
+
+            </div>
+
+            `
+
+        );
+
+    }
+
+
+    if (
+
+        !map.hasLayer(
+
+            dynamicLocationMarkers[markerKey]
+
+        )
+
+    ) {
+
+        dynamicLocationMarkers[markerKey].addTo(map);
+
+    }
+
+}
+
+
+// =====================================================
+// HIDE DISTRICT MARKERS
+// =====================================================
+
+function hideUnusedDistrictMarkers(
+
+    activeNames
+
+) {
+
+    Object.keys(
+
+        districtMarkers
+
+    ).forEach(name => {
+
+        if (
+
+            !activeNames.has(name) &&
+
+            map.hasLayer(
+
+                districtMarkers[name]
+
+            )
+
+        ) {
+
+            map.removeLayer(
+
+                districtMarkers[name]
+
+            );
+
+        }
+
+    });
+
+}
+
+
+// =====================================================
+// HIDE MUNICIPALITY MARKERS
+// =====================================================
+
+function hideUnusedMunicipalityMarkers(
+
+    activeCities
+
+) {
+
+    Object.keys(
+
+        municipalityMarkers
+
+    ).forEach(city => {
+
+        if (
+
+            !activeCities.has(city) &&
+
+            map.hasLayer(
+
+                municipalityMarkers[city]
+
+            )
+
+        ) {
+
+            map.removeLayer(
+
+                municipalityMarkers[city]
+
+            );
+
+        }
+
+    });
+
+}
+
+
+// =====================================================
+// HEATMAP UPDATE
+// =====================================================
+
+function updateHeatMap(rows) {
+
+    const validRows = (rows || []).filter(row => {
+
+        const lat = Number(row.lat);
+
+        const lon = Number(row.long);
+
+        const count = Number(row.count || 0);
+
+        return (
+
+            !isNaN(lat) &&
+
+            !isNaN(lon) &&
+
+            count > 0
+
+        );
+
+    });
+
+
+    if (!validRows.length) {
+
+        latestHeatPoints = [];
+
+        latestMaxCount = 0;
+
+
+        if (incidentHeatLayer) {
+
+            incidentHeatLayer.setLatLngs([]);
+
+        }
+
+        return;
+
+    }
+
+
+    // -------------------------------------------------
+    // Find maximum
+    // -------------------------------------------------
+
+    latestMaxCount = Math.max(
+
+        ...validRows.map(
+
+            row => Number(row.count || 0)
+
+        )
+
+    );
+
+
+    // -------------------------------------------------
+    // Create heat points
+    //
+    // sqrt scaling prevents a very large value
+    // from completely hiding smaller locations.
+    // -------------------------------------------------
+
+    latestHeatPoints = validRows.map(row => {
+
+        const lat = Number(row.lat);
+
+        const lon = Number(row.long);
+
+        const count = Number(row.count || 0);
+
+
+        let intensity =
+
+            Math.sqrt(
+
+                count /
+
+                latestMaxCount
+
+            );
+
+
+        // Keep low values visible
+
+        intensity = Math.max(
+
+            0.12,
+
+            Math.min(
+
+                1,
+
+                intensity
+
+            )
+
+        );
+
+
+        return [
+
+            lat,
+
+            lon,
+
+            intensity
+
+        ];
+
+    });
+
+
+    // -------------------------------------------------
+    // Create heatmap
+    // -------------------------------------------------
+
+    if (!incidentHeatLayer) {
+
+        incidentHeatLayer =
+
+            L.heatLayer(
+
+                latestHeatPoints,
+
+                {
+
+                    radius: 65,
+
+                    blur: 48,
+
+                    maxZoom: 17,
+
+                    max: 1,
+
+                    minOpacity: 0.28,
+
+                    gradient: {
+
+                        0.00:
+                            "#2563eb",
+
+                        0.20:
+                            "#06b6d4",
+
+                        0.40:
+                            "#22c55e",
+
+                        0.60:
+                            "#facc15",
+
+                        0.78:
+                            "#f97316",
+
+                        1.00:
+                            "#dc2626"
+
+                    },
+
+                    pane:
+                        "heatPane"
+
+                }
+
+            );
+
+
+        incidentHeatLayer.addTo(map);
+
+    } else {
+
+        incidentHeatLayer.setLatLngs(
+
+            latestHeatPoints
+
+        );
+
+    }
+
+
+    // -------------------------------------------------
+    // Make sure heat stays behind boundaries
+    // -------------------------------------------------
+
+    if (
+
+        incidentHeatLayer &&
+
+        map.hasLayer(
+
+            incidentHeatLayer
+
+        )
+
+    ) {
+
+        incidentHeatLayer.bringToBack();
+
+    }
+
+}
+
+
+// =====================================================
+// HEAT LEGEND
+// =====================================================
+
+const heatLegend =
+
+    L.control({
+
+        position:
+            "bottomleft"
+
+    });
+
+
+heatLegend.onAdd = function() {
+
+    const div =
+
+        L.DomUtil.create(
+
+            "div",
+
+            "heat-legend"
+
+        );
+
+
+    div.innerHTML = `
+
+        <div class="heat-legend-title">
+
+            Incident Density
+
+        </div>
+
+
+        <div class="heat-gradient"></div>
+
+
+        <div class="heat-legend-labels">
+
+            <span>Low</span>
+
+            <span>Medium</span>
+
+            <span>High</span>
+
+        </div>
+
+    `;
+
+
+    return div;
+
+};
+
+
+heatLegend.addTo(map);
+
+
+// =====================================================
+// REFRESH COUNTS
+// =====================================================
+
+function refreshCounts() {
+
+    const selectedDistrictsByCity = {
+
+        Dammam: [],
+
+        Dhahran: [],
+
+        Khobar: []
+
+    };
+
+
+    Object.keys(
+
+        districtLayers
+
+    ).forEach(name => {
+
+        const layer =
+
+            districtLayers[name];
+
+
+        if (
+
+            layer &&
+
+            map.hasLayer(layer)
+
+        ) {
+
+            const city =
+
+                districtToCity[name];
+
+
+            if (
+
+                selectedDistrictsByCity[city]
+
+            ) {
+
+                selectedDistrictsByCity[city]
+
+                    .push(name);
+
+            }
+
+        }
+
+    });
+
+
+    const activeDistrictMarkers =
+
+        new Set();
+
+
+    const activeMunicipalityMarkers =
+
+        new Set();
+
+
+    Object.keys(
+
+        selectedDistrictsByCity
+
+    ).forEach(city => {
+
+        const selected =
+
+            selectedDistrictsByCity[city];
+
+
+        const boundary =
+
+            municipalityBoundaryLayers[city];
+
+
+        const center =
+
+            municipalityCenters[city];
+
+
+        const total =
+
+            municipalityTotals[city] || 0;
+
+
+        if (selected.length > 0) {
+
+            selected.forEach(name => {
+
+                const d =
+
+                    districtCounts[name];
+
+
+                if (d) {
+
+                    updateDistrictMarker(
+
+                        name,
+
+                        d.lat,
+
+                        d.long,
+
+                        d.count
+
+                    );
+
+
+                    activeDistrictMarkers
+
+                        .add(name);
+
+                }
+
+
+                if (
+
+                    districtLayers[name]
+
+                ) {
+
+                    districtLayers[name]
+
+                        .setStyle(
+
+                            districtStyle(
+
+                                city,
+
+                                name
+
+                            )
+
+                        );
+
+
+                    bindOrUpdateTooltip(
+
+                        districtLayers[name],
+
+                        districtTooltipHtml(
+
+                            name
+
+                        )
+
+                    );
+
+                }
+
+            });
+
+
+            if (
+
+                municipalityMarkers[city] &&
+
+                map.hasLayer(
+
+                    municipalityMarkers[city]
+
+                )
+
+            ) {
+
+                map.removeLayer(
+
+                    municipalityMarkers[city]
+
+                );
+
+            }
+
+        } else {
+
+            if (
+
+                boundary &&
+
+                center &&
+
+                map.hasLayer(boundary)
+
+            ) {
+
+                updateMunicipalityMarker(
+
+                    city,
+
+                    center.lat,
+
+                    center.long,
+
+                    total
+
+                );
+
+
+                activeMunicipalityMarkers
+
+                    .add(city);
+
+            }
+
+        }
+
+
+        if (boundary) {
+
+            bindOrUpdateTooltip(
+
+                boundary,
+
+                municipalityTooltipHtml(
+
+                    city
+
+                )
+
+            );
+
+        }
+
+    });
+
+
+    hideUnusedDistrictMarkers(
+
+        activeDistrictMarkers
+
+    );
+
+
+    hideUnusedMunicipalityMarkers(
+
+        activeMunicipalityMarkers
+
+    );
+
+}
+
+
+// =====================================================
+// APPLY GRAFANA DATA
+// =====================================================
+
+function applyIncidentData(rows) {
+
+    // -------------------------------------------------
+    // Clear old district data
+    // -------------------------------------------------
+
+    Object.keys(
+
+        districtCounts
+
+    ).forEach(k =>
+
+        delete districtCounts[k]
+
+    );
+
+
+    municipalityTotals.Dammam = 0;
+
+    municipalityTotals.Dhahran = 0;
+
+    municipalityTotals.Khobar = 0;
+
+
+    const currentDynamicKeys =
+
+        new Set();
+
+
+    // -------------------------------------------------
+    // FIRST PASS
+    //
+    // Build data
+    // -------------------------------------------------
+
+    (rows || []).forEach(row => {
+
+        const name =
+
+            String(
+
+                row.state || ""
+
+            ).trim();
+
+
+        const count =
+
+            Number(
+
+                row.count || 0
+
+            );
+
+
+        const lat =
+
+            Number(row.lat);
+
+
+        const long =
+
+            Number(row.long);
+
+
+        if (
+
+            !name ||
+
+            isNaN(count)
+
+        ) {
+
+            return;
+
+        }
+
+
+        districtCounts[name] = {
+
+            count,
+
+            lat:
+
+                isNaN(lat)
+
+                    ? null
+
+                    : lat,
+
+            long:
+
+                isNaN(long)
+
+                    ? null
+
+                    : long
+
+        };
+
+
+        const city =
+
+            districtToCity[name];
+
+
+        if (city) {
+
+            municipalityTotals[city] +=
+
+                count;
+
+        }
+
+    });
+
+
+    // -------------------------------------------------
+    // Risk
+    // -------------------------------------------------
+
+    calculateMunicipalityRiskStats();
+
+
+    // -------------------------------------------------
+    // SECOND PASS
+    //
+    // Dynamic locations
+    // -------------------------------------------------
+
+    (rows || []).forEach(row => {
+
+        const name =
+
+            String(
+
+                row.state || ""
+
+            ).trim();
+
+
+        const count =
+
+            Number(
+
+                row.count || 0
+
+            );
+
+
+        const lat =
+
+            Number(row.lat);
+
+
+        const long =
+
+            Number(row.long);
+
+
+        if (
+
+            !name ||
+
+            isNaN(count) ||
+
+            isNaN(lat) ||
+
+            isNaN(long)
+
+        ) {
+
+            return;
+
+        }
+
+
+        const city =
+
+            districtToCity[name];
+
+
+        // -------------------------------------------
+        // Not in GeoJSON
+        // -------------------------------------------
+
+        if (!city) {
+
+            const markerKey =
+
+                `${name}_${lat}_${long}`;
+
+
+            currentDynamicKeys.add(
+
+                markerKey
+
+            );
+
+
+            updateDynamicLocationMarker(
+
+                name,
+
+                lat,
+
+                long,
+
+                count
+
+            );
+
+        }
+
+    });
+
+
+    // -------------------------------------------------
+    // Remove old dynamic markers
+    // -------------------------------------------------
+
+    Object.keys(
+
+        dynamicLocationMarkers
+
+    ).forEach(key => {
+
+        if (
+
+            !currentDynamicKeys.has(key)
+
+        ) {
+
+            if (
+
+                map.hasLayer(
+
+                    dynamicLocationMarkers[key]
+
+                )
+
+            ) {
+
+                map.removeLayer(
+
+                    dynamicLocationMarkers[key]
+
+                );
+
+            }
+
+        }
+
+    });
+
+
+    // -------------------------------------------------
+    // Update district colors
+    // -------------------------------------------------
+
+    Object.keys(
+
+        districtLayers
+
+    ).forEach(name => {
+
+        const city =
+
+            districtToCity[name];
+
+
+        if (
+
+            districtLayers[name]
+
+        ) {
+
+            districtLayers[name]
+
+                .setStyle(
+
+                    districtStyle(
+
+                        city,
+
+                        name
+
+                    )
+
+                );
+
+
+            bindOrUpdateTooltip(
+
+                districtLayers[name],
+
+                districtTooltipHtml(
+
+                    name
+
+                )
+
+            );
+
+        }
+
+    });
+
+
+    // -------------------------------------------------
+    // Municipality tooltips
+    // -------------------------------------------------
+
+    Object.keys(
+
+        municipalityBoundaryLayers
+
+    ).forEach(city => {
+
+        bindOrUpdateTooltip(
+
+            municipalityBoundaryLayers[city],
+
+            municipalityTooltipHtml(
+
+                city
+
+            )
+
+        );
+
+    });
+
+
+    // -------------------------------------------------
+    // HEATMAP
+    //
+    // THIS IS THE MAIN NEW PART
+    // -------------------------------------------------
+
+    updateHeatMap(rows);
+
+
+    scheduleRefresh();
+
+}
+
+
+// =====================================================
+// COLLAPSE TREE
+// =====================================================
+
+function collapseLayerTreeGroups() {
+
+    setTimeout(() => {
+
+        document
+
+            .querySelectorAll(
+
+                ".leaflet-layerstree-header-pointer"
+
+            )
+
+            .forEach(pointer => {
+
+                const node =
+
+                    pointer.closest(
+
+                        ".leaflet-layerstree-node"
+
+                    );
+
+
+                if (!node) {
+
+                    return;
+
+                }
+
+
+                if (
+
+                    !node.classList.contains(
+
+                        "leaflet-layerstree-node-collapsed"
+
+                    )
+
+                ) {
+
+                    pointer.click();
+
+                }
+
+            });
+
+    }, 300);
+
+}
+
+
+// =====================================================
+// LOAD GEOJSON
+// =====================================================
+
+Promise.all([
+
+    fetch(
+
+        "./municipality.geojson"
+
+    ).then(r => r.json()),
+
+
+    fetch(
+
+        "./dammam.geojson"
+
+    ).then(r => r.json()),
+
+
+    fetch(
+
+        "./dhahran.geojson"
+
+    ).then(r => r.json()),
+
+
+    fetch(
+
+        "./khobar.geojson"
+
+    ).then(r => r.json())
+
+])
+
+
+.then(
+
+    ([
+
+        municipalityData,
+
+        dammamData,
+
+        dhahranData,
+
+        khobarData
+
+    ]) => {
+
+
+        // =================================================
+        // CREATE HEATMAP PANE
+        //
+        // Lower than normal overlay.
+        // =================================================
+
+        map.createPane("heatPane");
+
+        map.getPane("heatPane").style.zIndex = 350;
+
+        map.getPane("heatPane").style.pointerEvents = "none";
+
+
+        // =================================================
+        // MUNICIPALITY BOUNDARIES
+        // =================================================
+
+        municipalityData.features.forEach(f => {
+
+            const name =
+
+                (
+
+                    f.properties.REMARKS ||
+
+                    ""
+
+                ).trim();
+
+
+            let city = null;
+
+
+            if (name === "الدمام") {
+
+                city = "Dammam";
+
+            }
+
+
+            if (name === "الظهران") {
+
+                city = "Dhahran";
+
+            }
+
+
+            if (name === "الخبر") {
+
+                city = "Khobar";
+
+            }
+
+
+            if (!city) {
+
+                return;
+
+            }
+
+
+            const boundary =
+
+                L.geoJSON(
+
+                    f,
+
+                    {
+
+                        style:
+
+                            boundaryStyle(city),
+
+                        pane:
+
+                            "overlayPane"
+
+                    }
+
+                );
+
+
+            bindOrUpdateTooltip(
+
+                boundary,
+
+                municipalityTooltipHtml(city)
+
+            );
+
+
+            boundary.on(
+
+                "mouseover",
+
+                function(e) {
+
+                    boundary.setStyle({
+
+                        weight: 4,
+
+                        fillOpacity: 0.08
+
+                    });
+
+
+                    boundary.openTooltip(
+
+                        e.latlng
+
+                    );
+
+                }
+
+            );
+
+
+            boundary.on(
+
+                "mouseout",
+
+                function() {
+
+                    boundary.setStyle(
+
+                        boundaryStyle(city)
+
+                    );
+
+                }
+
+            );
+
+
+            municipalityBoundaryLayers[city] =
+
+                boundary;
+
+
+            const bounds =
+
+                boundary.getBounds();
+
+
+            const center =
+
+                bounds.getCenter();
+
+
+            municipalityCenters[city] = {
+
+                lat:
+
+                    center.lat,
+
+                long:
+
+                    center.lng
+
+            };
+
+
+            boundary.on(
+
+                "add remove",
+
+                scheduleRefresh
+
+            );
+
+        });
+
+
+        // =================================================
+        // DISTRICT LAYERS
+        // =================================================
+
+        function makeDistrictNodes(
+
+            data,
+
+            city
+
+        ) {
+
+            return data.features.map(f => {
+
+                const districtName =
+
+                    (
+
+                        f.properties.REMARKS ||
+
+                        ""
+
+                    ).trim();
+
+
+                districtToCity[
+
+                    districtName
+
+                ] = city;
+
+
+                const layer =
+
+                    L.geoJSON(
+
+                        f,
+
+                        {
+
+                            style:
+
+                                districtStyle(
+
+                                    city,
+
+                                    districtName
+
+                                )
+
+                        }
+
+                    );
+
+
+                bindOrUpdateTooltip(
+
+                    layer,
+
+                    districtTooltipHtml(
+
+                        districtName
+
+                    )
+
+                );
+
+
+                layer.on({
+
+                    mouseover:
+
+                        function(e) {
+
+                            e.target.setStyle({
+
+                                color:
+                                    "#000000",
+
+                                weight:
+                                    3,
+
+                                fillColor:
+                                    getDistrictFillColor(
+                                        districtName
+                                    ),
+
+                                fillOpacity:
+                                    0.18
+
+                            });
+
+
+                            layer.openTooltip(
+
+                                e.latlng
+
+                            );
+
+                        },
+
+
+                    mouseout:
+
+                        function(e) {
+
+                            e.target.setStyle(
+
+                                districtStyle(
+
+                                    city,
+
+                                    districtName
+
+                                )
+
+                            );
+
+                        },
+
+
+                    click:
+
+                        function() {
+
+                            const d =
+
+                                districtCounts[
+
+                                    districtName
+
+                                ];
+
+
+                            window.parent.postMessage(
+
+                                {
+
+                                    type:
+                                        "mapClick",
+
+                                    state:
+                                        districtName,
+
+                                    lat:
+                                        d
+                                            ? d.lat
+                                            : null,
+
+                                    long:
+                                        d
+                                            ? d.long
+                                            : null
+
+                                },
+
+                                "*"
+
+                            );
+
+                        }
+
+                });
+
+
+                districtLayers[
+
+                    districtName
+
+                ] = layer;
+
+
+                layer.on(
+
+                    "add remove",
+
+                    scheduleRefresh
+
+                );
+
+
+                return {
+
+                    label:
+                        districtName,
+
+                    layer:
+                        layer
+
+                };
+
+            });
+
+        }
+
+
+        const dammamDistricts =
+
+            makeDistrictNodes(
+
+                dammamData,
+
+                "Dammam"
+
+            );
+
+
+        const dhahranDistricts =
+
+            makeDistrictNodes(
+
+                dhahranData,
+
+                "Dhahran"
+
+            );
+
+
+        const khobarDistricts =
+
+            makeDistrictNodes(
+
+                khobarData,
+
+                "Khobar"
+
+            );
+
+
+        // =================================================
+        // TREE
+        // =================================================
+
+        const overlaysTree = {
+
+            label:
+                "Map Layers",
+
+            selectAllCheckbox:
+                false,
+
+            children: [
+
+                {
+
+                    label:
+                        "🔥 Incident Heatmap",
+
+                    layer:
+                        incidentHeatLayer
+
+                },
+
+
+                {
+
+                    label:
+                        "Dammam",
+
+                    selectAllCheckbox:
+                        true,
+
+                    children: [
+
+                        {
+
+                            label:
+                                "Boundary",
+
+                            layer:
+                                municipalityBoundaryLayers[
+                                    "Dammam"
+                                ]
+
+                        },
+
+                        {
+
+                            label:
+                                "Districts",
+
+                            selectAllCheckbox:
+                                true,
+
+                            children:
+                                dammamDistricts
+
+                        }
+
+                    ]
+
+                },
+
+
+                {
+
+                    label:
+                        "Dhahran",
+
+                    selectAllCheckbox:
+                        true,
+
+                    children: [
+
+                        {
+
+                            label:
+                                "Boundary",
+
+                            layer:
+                                municipalityBoundaryLayers[
+                                    "Dhahran"
+                                ]
+
+                        },
+
+                        {
+
+                            label:
+                                "Districts",
+
+                            selectAllCheckbox:
+                                true,
+
+                            children:
+                                dhahranDistricts
+
+                        }
+
+                    ]
+
+                },
+
+
+                {
+
+                    label:
+                        "Khobar",
+
+                    selectAllCheckbox:
+                        true,
+
+                    children: [
+
+                        {
+
+                            label:
+                                "Boundary",
+
+                            layer:
+                                municipalityBoundaryLayers[
+                                    "Khobar"
+                                ]
+
+                        },
+
+                        {
+
+                            label:
+                                "Districts",
+
+                            selectAllCheckbox:
+                                true,
+
+                            children:
+                                khobarDistricts
+
+                        }
+
+                    ]
+
+                }
+
+            ]
+
+        };
+
+
+        // =================================================
+        // LAYER CONTROL
+        // =================================================
+
+        L.control.layers.tree(
+
+            {
+
+                "OpenStreetMap":
+                    osm
+
+            },
+
+            overlaysTree,
+
+            {
+
+                collapsed:
+                    false,
+
+                namedToggle:
+                    true,
+
+                selectorBack:
+                    false,
+
+                closedSymbol:
+                    "▶",
+
+                openedSymbol:
+                    "▼"
+
+            }
+
+        ).addTo(map);
+
+
+        collapseLayerTreeGroups();
+
+
+        // =================================================
+        // DEFAULT BOUNDARIES
+        // =================================================
+
+        const defaultBoundaryLayers = [
+
+            municipalityBoundaryLayers.Dammam,
+
+            municipalityBoundaryLayers.Dhahran,
+
+            municipalityBoundaryLayers.Khobar
+
+        ].filter(Boolean);
+
+
+        defaultBoundaryLayers.forEach(layer => {
+
+            if (!map.hasLayer(layer)) {
+
+                layer.addTo(map);
+
+            }
+
+        });
+
+
+        // =================================================
+        // MAP EXTENT
+        // =================================================
+
+        if (
+
+            defaultBoundaryLayers.length > 0
+
+        ) {
+
+            map.fitBounds(
+
+                L.featureGroup(
+
+                    defaultBoundaryLayers
+
+                ).getBounds(),
+
+                {
+
+                    padding: [
+
+                        20,
+
+                        20
+
+                    ]
+
+                }
+
+            );
+
+        }
+
+
+        // =================================================
+        // READY
+        // =================================================
+
+        mapReady = true;
+
+
+        if (pendingIncidentData) {
+
+            applyIncidentData(
+
+                pendingIncidentData
+
+            );
+
+
+            pendingIncidentData = null;
+
+        } else {
+
+            calculateMunicipalityRiskStats();
+
+            scheduleRefresh();
+
+        }
+
+
+        // =================================================
+        // INFORM GRAFANA
+        // =================================================
+
+        window.parent.postMessage(
+
+            {
+
+                type:
+                    "iframeReady"
+
+            },
+
+            "*"
+
+        );
+
+    }
+
+)
+
+
+.catch(err => {
+
+    console.error(
+
+        "Error loading GeoJSON:",
+
+        err
+
+    );
+
+});
+
+
+// =====================================================
+// RECEIVE DATA FROM GRAFANA
+// =====================================================
+
+window.addEventListener(
+
+    "message",
+
+    event => {
+
+        // -------------------------------------------------
+        // Security
+        // -------------------------------------------------
+
+        if (
+
+            event.data?.type !==
+
+            "incidentData"
+
+        ) {
+
+            return;
+
+        }
+
+
+        const rows =
+
+            event.data.data || [];
+
+
+        console.log(
+
+            "Received incident data:",
+
+            rows
+
+        );
+
+
+        if (!mapReady) {
+
+            pendingIncidentData =
+
+                rows;
+
+            return;
+
+        }
+
+
+        applyIncidentData(rows);
+
+    }
+
+);
+
+</script>
+
+</body>
+</html>
