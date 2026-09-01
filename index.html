@@ -1,4560 +1,2684 @@
-```html
 <!DOCTYPE html>
 <html>
-
 <head>
+  <meta charset="UTF-8">
 
-<meta charset="utf-8">
-
-<title>Municipality Incident Map</title>
-
-<meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-/>
-
-<link
+  <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-/>
+  />
 
-<link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet.control.layers.tree@1.1.0/L.Control.Layers.Tree.css"
-/>
+  <style>
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: transparent;
+      font-family: Arial, sans-serif;
+    }
 
-<style>
+    #map {
+      width: 100%;
+      height: 100%;
+      background: #f5f5f5;
+    }
 
-/* =========================================================
-   PAGE
-   ========================================================= */
+    /* ==============================
+       BUBBLE
+       ============================== */
 
-html,
-body {
-    margin: 0;
-    padding: 0;
+    .risk-bubble {
+      display: flex;
+      align-items: center;
+      justify-content: center;
 
-    width: 100%;
-    height: 100%;
+      border-radius: 50%;
 
-    overflow: hidden;
-}
+      border: none !important;
+      outline: none !important;
 
-#map {
-    width: 100%;
-    height: 100vh;
-}
+      box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.20),
+        inset 0 0 8px rgba(255, 255, 255, 0.20);
 
+      color: white;
 
-/* =========================================================
-   LAYER CONTROL
-   ========================================================= */
+      font-weight: bold;
 
-.leaflet-control-layers {
-    max-height: 85vh;
-    overflow-y: auto;
-    font-size: 13px;
-}
+      text-align: center;
 
+      cursor: pointer;
 
-/* =========================================================
-   ALL BUBBLES
-   IMPORTANT:
-   NO WHITE BORDER
-   ========================================================= */
-
-.dynamic-location-marker,
-.cluster-marker,
-.municipality-total-marker {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-}
-
-.dynamic-location-marker *,
-.cluster-marker *,
-.municipality-total-marker * {
-    border: none !important;
-}
-
-
-/* =========================================================
-   GENERIC COUNT CIRCLE
-   ========================================================= */
-
-.count-circle {
-
-    display: flex;
-
-    align-items: center;
-    justify-content: center;
-
-    border-radius: 50%;
-
-    border: none !important;
-
-    padding: 0;
-    margin: 0;
-
-    box-sizing: border-box;
-
-    font-weight: 900;
-    line-height: 1;
-
-    white-space: nowrap;
-    text-align: center;
-
-    color: white;
-
-    box-shadow:
-        0 2px 8px rgba(0,0,0,0.28),
-        0 0 12px rgba(0,0,0,0.18);
-
-    transition:
+      transition:
         transform 0.15s ease,
         box-shadow 0.15s ease;
-}
-
-
-/* =========================================================
-   HOVER
-   NO WHITE RING
-   ========================================================= */
-
-.count-circle:hover {
-
-    transform: scale(1.10);
-
-    box-shadow:
-        0 4px 14px rgba(0,0,0,0.35);
-}
-
-
-/* =========================================================
-   RISK COLORS
-   ========================================================= */
-
-.low-count .count-circle {
-    background: rgba(22,163,74,0.90);
-}
-
-.medium-count .count-circle {
-    background: rgba(250,204,21,0.94);
-    color: #111827;
-}
-
-.high-count .count-circle {
-    background: rgba(220,38,38,0.92);
-}
-
-.no-data-count .count-circle {
-    background: rgba(148,163,184,0.80);
-}
-
-
-/* =========================================================
-   MUNICIPALITY CIRCLE
-   ========================================================= */
-
-.municipality-total-circle {
-
-    display: flex;
-
-    align-items: center;
-    justify-content: center;
-
-    border-radius: 50%;
-
-    border: none !important;
-
-    box-sizing: border-box;
-
-    color: white;
-
-    font-weight: 900;
-
-    line-height: 1;
-
-    text-align: center;
-
-    box-shadow:
-        0 3px 12px rgba(0,0,0,0.35);
-
-    transition:
-        transform 0.2s ease,
-        box-shadow 0.2s ease;
-}
-
-.municipality-total-circle:hover {
-
-    transform: scale(1.10);
-
-    box-shadow:
-        0 5px 18px rgba(0,0,0,0.40);
-}
-
-
-/* =========================================================
-   TOOLTIP
-   ========================================================= */
-
-.leaflet-tooltip.custom-tooltip {
-
-    background: rgba(255,255,255,0.97);
-
-    border: 1px solid #222;
-
-    border-radius: 7px;
-
-    box-shadow:
-        0 2px 10px rgba(0,0,0,0.30);
-
-    color: #111;
-
-    padding: 7px 9px;
-
-    font-size: 13px;
-
-    line-height: 1.55;
-}
-
-
-/* =========================================================
-   LEGEND
-   ========================================================= */
-
-.risk-legend {
-
-    background: rgba(255,255,255,0.96);
-
-    border: 1px solid #333;
-
-    border-radius: 9px;
-
-    padding: 9px 12px;
-
-    box-shadow:
-        0 2px 8px rgba(0,0,0,0.28);
-
-    color: #111;
-
-    font-size: 12px;
-
-    min-width: 150px;
-}
-
-.risk-legend-title {
-
-    font-weight: 800;
-
-    font-size: 13px;
-
-    text-align: center;
-
-    margin-bottom: 7px;
-}
-
-.legend-row {
-
-    display: flex;
-
-    align-items: center;
-
-    gap: 7px;
-
-    margin: 4px 0;
-}
-
-.legend-color {
-
-    width: 18px;
-    height: 18px;
-
-    border-radius: 50%;
-
-    border: none !important;
-}
-
-.legend-green {
-    background: #16a34a;
-}
-
-.legend-yellow {
-    background: #facc15;
-}
-
-.legend-red {
-    background: #dc2626;
-}
-
-
-/* =========================================================
-   TITLE
-   ========================================================= */
-
-.map-title {
-
-    position: absolute;
-
-    top: 10px;
-    left: 50%;
-
-    transform: translateX(-50%);
-
-    z-index: 9999;
-
-    background: rgba(255,255,255,0.94);
-
-    border: 1px solid #333;
-
-    border-radius: 8px;
-
-    padding: 7px 18px;
-
-    font-size: 14px;
-
-    font-weight: 800;
-
-    color: #111;
-
-    box-shadow:
-        0 2px 7px rgba(0,0,0,0.25);
-
-    pointer-events: none;
-}
-
-
-/* =========================================================
-   LEVEL INFORMATION
-   ========================================================= */
-
-.map-info {
-
-    position: absolute;
-
-    top: 52px;
-    left: 50%;
-
-    transform: translateX(-50%);
-
-    z-index: 9998;
-
-    background: rgba(255,255,255,0.90);
-
-    border-radius: 6px;
-
-    padding: 5px 12px;
-
-    font-size: 11px;
-
-    color: #333;
-
-    pointer-events: none;
-}
-
-
-/* =========================================================
-   BACK BUTTON
-   ========================================================= */
-
-.map-back-button {
-
-    background: white;
-
-    border: 1px solid #333;
-
-    border-radius: 7px;
-
-    padding: 7px 12px;
-
-    font-size: 13px;
-
-    font-weight: 800;
-
-    cursor: pointer;
-
-    box-shadow:
-        0 2px 8px rgba(0,0,0,0.3);
-}
-
-.map-back-button:hover {
-    background: #f3f4f6;
-}
-
-
-/* =========================================================
-   MOBILE
-   ========================================================= */
-
-@media(max-width:600px) {
-
-    .map-title {
-
-        font-size: 12px;
-
-        padding: 6px 12px;
     }
 
-    .risk-legend {
+    .risk-bubble:hover {
+      transform: scale(1.08);
 
-        min-width: 130px;
-
-        font-size: 11px;
+      box-shadow:
+        0 4px 14px rgba(0, 0, 0, 0.30),
+        inset 0 0 10px rgba(255, 255, 255, 0.25);
     }
-}
 
-</style>
+    .risk-high {
+      background: rgba(220, 45, 45, 0.82);
+    }
 
+    .risk-medium {
+      background: rgba(245, 190, 35, 0.86);
+      color: #222;
+    }
+
+    .risk-low {
+      background: rgba(55, 170, 80, 0.82);
+    }
+
+    /* ==============================
+       LABEL
+       ============================== */
+
+    .bubble-label {
+      max-width: 90%;
+      line-height: 1.15;
+      pointer-events: none;
+    }
+
+    .bubble-name {
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .bubble-count {
+      font-size: 14px;
+      margin-top: 2px;
+      font-weight: 800;
+    }
+
+    /* ==============================
+       TOP BAR
+       ============================== */
+
+    .map-header {
+      position: absolute;
+
+      z-index: 1000;
+
+      top: 12px;
+      left: 50%;
+
+      transform: translateX(-50%);
+
+      background: rgba(255,255,255,0.94);
+
+      padding: 8px 16px;
+
+      border-radius: 20px;
+
+      box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+
+      font-size: 13px;
+
+      font-weight: 700;
+
+      color: #333;
+
+      white-space: nowrap;
+    }
+
+    /* ==============================
+       BACK BUTTON
+       ============================== */
+
+    #backButton {
+      position: absolute;
+
+      z-index: 1001;
+
+      top: 12px;
+      left: 12px;
+
+      display: none;
+
+      background: white;
+
+      border: none;
+
+      border-radius: 18px;
+
+      padding: 8px 14px;
+
+      cursor: pointer;
+
+      font-weight: 700;
+
+      box-shadow: 0 2px 8px rgba(0,0,0,0.20);
+
+      color: #333;
+    }
+
+    #backButton:hover {
+      background: #eeeeee;
+    }
+
+    /* ==============================
+       LEGEND
+       ============================== */
+
+    .legend {
+      position: absolute;
+
+      z-index: 1000;
+
+      right: 15px;
+      bottom: 15px;
+
+      background: rgba(255,255,255,0.95);
+
+      border-radius: 8px;
+
+      padding: 9px 12px;
+
+      box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+
+      font-size: 11px;
+    }
+
+    .legend-row {
+      display: flex;
+      align-items: center;
+      margin: 4px 0;
+    }
+
+    .legend-dot {
+      width: 11px;
+      height: 11px;
+
+      border-radius: 50%;
+
+      margin-right: 7px;
+    }
+
+    .legend-red {
+      background: #dc2d2d;
+    }
+
+    .legend-yellow {
+      background: #f5be23;
+    }
+
+    .legend-green {
+      background: #37aa50;
+    }
+
+    /* ==============================
+       LEAFLET
+       ============================== */
+
+    .leaflet-control-attribution {
+      font-size: 8px;
+    }
+
+    .leaflet-tooltip {
+      border: none;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.20);
+      font-weight: 600;
+    }
+  </style>
 </head>
-
 
 <body>
 
 <div id="map"></div>
 
-
-<div class="map-title">
-    Municipality Incident Map
+<div id="mapHeader" class="map-header">
+  Municipalities
 </div>
 
+<button id="backButton">
+  ← Back
+</button>
 
-<div
-    id="map-info"
-    class="map-info"
->
-    🟢 Low &nbsp;&nbsp;
-    🟡 Medium &nbsp;&nbsp;
-    🔴 High
+<div class="legend">
+
+  <div class="legend-row">
+    <span class="legend-dot legend-red"></span>
+    High
+  </div>
+
+  <div class="legend-row">
+    <span class="legend-dot legend-yellow"></span>
+    Medium
+  </div>
+
+  <div class="legend-row">
+    <span class="legend-dot legend-green"></span>
+    Low
+  </div>
+
 </div>
 
-
-<script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
-</script>
-
-
-<script
-    src="https://unpkg.com/leaflet.control.layers.tree@1.1.0/L.Control.Layers.Tree.js">
-</script>
-
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
 
-/* =========================================================
-   MAP
-   ========================================================= */
+(function () {
 
-const map = L.map("map", {
+  /* ============================================================
+     CONFIGURATION
+     ============================================================ */
 
-    maxZoom: 18
+  const CONFIG = {
 
-});
+    /*
+     * Number of bubbles created after clicking a municipality.
+     */
+    BUBBLES_PER_LEVEL: 3,
+
+    /*
+     * Minimum and maximum bubble size.
+     */
+    MIN_RADIUS: 22,
+    MAX_RADIUS: 52,
+
+    /*
+     * Small distance used to separate overlapping points.
+     */
+    SEPARATION_FACTOR: 0.012,
+
+    /*
+     * Initial zoom.
+     */
+    INITIAL_ZOOM: 6,
+
+    /*
+     * Maximum zoom when drilling.
+     */
+    MAX_ZOOM: 15,
+
+    /*
+     * Colors.
+     */
+    COLORS: {
+      HIGH: "#dc2d2d",
+      MEDIUM: "#f5be23",
+      LOW: "#37aa50"
+    }
+
+  };
 
 
-/* =========================================================
-   OPEN STREET MAP
-   ========================================================= */
+  /* ============================================================
+     MAP
+     ============================================================ */
 
-const osm = L.tileLayer(
+  const map = L.map("map", {
 
+    zoomControl: true,
+
+    attributionControl: true,
+
+    preferCanvas: true
+
+  });
+
+
+  L.tileLayer(
     "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-
     {
+      maxZoom: 19,
 
-        attribution:
-            "&copy; OpenStreetMap contributors",
+      attribution: "&copy; OpenStreetMap contributors"
+    }
+  ).addTo(map);
 
-        maxZoom: 19
 
+  map.setView(
+    [24.0, 45.0],
+    CONFIG.INITIAL_ZOOM
+  );
+
+
+  /* ============================================================
+     GLOBAL VARIABLES
+     ============================================================ */
+
+  let rawData = [];
+
+  let currentLevel = "municipality";
+
+  let currentParent = null;
+
+  let navigationStack = [];
+
+  let activeLayerGroup = L.layerGroup().addTo(map);
+
+
+  /* ============================================================
+     DOM
+     ============================================================ */
+
+  const header =
+    document.getElementById("mapHeader");
+
+  const backButton =
+    document.getElementById("backButton");
+
+
+  /* ============================================================
+     FIELD NORMALIZATION
+     ============================================================ */
+
+  function normalizeName(value) {
+
+    if (value === null || value === undefined) {
+      return "";
     }
 
-).addTo(map);
+    return String(value)
+      .trim()
+      .replace(/\s+/g, " ");
 
+  }
 
-/* =========================================================
-   MUNICIPALITIES
-   ========================================================= */
 
-const CITIES = [
-    "Dammam",
-    "Dhahran",
-    "Khobar"
-];
+  function lower(value) {
 
+    return normalizeName(value)
+      .toLowerCase();
 
-/* =========================================================
-   DATA STORES
-   ========================================================= */
+  }
 
-const districtCounts = {};
 
-const districtToCity = {};
+  /* ============================================================
+     FIND FIELD
+     ============================================================ */
 
-const districtNameLookup = {};
+  function findField(fields, candidates) {
 
-const districtLayers = {};
+    for (const candidate of candidates) {
 
-const municipalityBoundaryLayers = {};
+      const found =
+        fields.find(
+          f => lower(f.name) === lower(candidate)
+        );
 
-const municipalityBoundaryFeatures = {};
-
-const municipalityCenters = {};
-
-const municipalityIncidentRows = {
-
-    Dammam: [],
-    Dhahran: [],
-    Khobar: []
-
-};
-
-const municipalityTotals = {
-
-    Dammam: 0,
-    Dhahran: 0,
-    Khobar: 0
-
-};
-
-
-/* =========================================================
-   INCIDENT BUBBLE LAYER
-   ========================================================= */
-
-const incidentBubbleLayer =
-    L.layerGroup().addTo(map);
-
-
-/* =========================================================
-   MUNICIPALITY MARKERS
-   ========================================================= */
-
-const municipalityMarkers = {};
-
-
-/* =========================================================
-   CURRENT DRILL STATE
-   =========================================================
-
-   0 = Municipality
-
-   1 = First clustering layer
-
-   2 = Second clustering layer
-
-   3 = District layer
-
-   ========================================================= */
-
-let drillLevel = 0;
-
-let selectedMunicipality = null;
-
-let selectedCluster = null;
-
-let selectedSubCluster = null;
-
-
-/* =========================================================
-   CURRENT CLUSTER DATA
-   ========================================================= */
-
-let currentClusters = [];
-
-
-/* =========================================================
-   MAP STATE
-   ========================================================= */
-
-let mapReady = false;
-
-let pendingIncidentData = null;
-
-let refreshTimer = null;
-
-
-/* =========================================================
-   NORMALIZE NAME
-   ========================================================= */
-
-function normalizeName(value) {
-
-    return String(value || "")
-
-        .trim()
-
-        .replace(/\s+/g, " ")
-
-        .toLowerCase()
-
-        .replace(/[‐-‒–—―]/g, "-");
-
-}
-
-
-/* =========================================================
-   REMOVE ARABIC DIACRITICS
-   ========================================================= */
-
-function normalizeArabic(value) {
-
-    return String(value || "")
-
-        .trim()
-
-        .replace(/[\u064B-\u065F\u0670]/g, "")
-
-        .replace(/[أإآ]/g, "ا")
-
-        .replace(/ى/g, "ي")
-
-        .replace(/ة/g, "ه")
-
-        .replace(/\s+/g, " ");
-
-}
-
-
-/* =========================================================
-   CANONICAL DISTRICT NAME
-   ========================================================= */
-
-function districtLookupKey(name) {
-
-    return normalizeArabic(
-        normalizeName(name)
-    );
-
-}
-
-
-/* =========================================================
-   GET DISTRICT COUNT
-   ========================================================= */
-
-function getDistrictCount(name) {
-
-    const key =
-        districtLookupKey(name);
-
-    return Number(
-        districtNameLookup[key]?.count ||
-        districtCounts[name]?.count ||
-        0
-    );
-
-}
-
-
-/* =========================================================
-   UPDATE MAP INFO
-   ========================================================= */
-
-function updateMapInfo(text) {
-
-    const el =
-        document.getElementById("map-info");
-
-    if (el) {
-
-        el.innerHTML = text;
-
-    }
-
-}
-
-
-/* =========================================================
-   POINT IN RING
-   ========================================================= */
-
-function pointInRing(
-    lat,
-    lng,
-    ring
-) {
-
-    if (!ring || ring.length < 3) {
-
-        return false;
-
-    }
-
-    let inside = false;
-
-    for (
-
-        let i = 0,
-            j = ring.length - 1;
-
-        i < ring.length;
-
-        j = i++
-
-    ) {
-
-        const lngI =
-            Number(ring[i][0]);
-
-        const latI =
-            Number(ring[i][1]);
-
-        const lngJ =
-            Number(ring[j][0]);
-
-        const latJ =
-            Number(ring[j][1]);
-
-
-        const intersect =
-
-            ((latI > lat) !== (latJ > lat))
-
-            &&
-
-            (
-
-                lng <
-
-                (
-
-                    (lngJ - lngI) *
-
-                    (lat - latI) /
-
-                    ((latJ - latI) || 1e-12)
-
-                ) +
-
-                lngI
-
-            );
-
-
-        if (intersect) {
-
-            inside = !inside;
-
-        }
-
-    }
-
-    return inside;
-
-}
-
-
-/* =========================================================
-   POINT IN POLYGON
-   ========================================================= */
-
-function pointInPolygon(
-    lat,
-    lng,
-    coordinates
-) {
-
-    if (
-        !coordinates ||
-        !coordinates.length
-    ) {
-
-        return false;
+      if (found) {
+        return found;
+      }
 
     }
 
 
-    if (
-        !pointInRing(
-            lat,
-            lng,
-            coordinates[0]
-        )
-    ) {
+    /*
+     * Partial match.
+     */
 
-        return false;
+    for (const candidate of candidates) {
 
-    }
-
-
-    for (
-        let i = 1;
-        i < coordinates.length;
-        i++
-    ) {
-
-        if (
-            pointInRing(
-                lat,
-                lng,
-                coordinates[i]
+      const found =
+        fields.find(
+          f =>
+            lower(f.name).includes(
+              lower(candidate)
             )
-        ) {
-
-            return false;
-
-        }
-
-    }
-
-
-    return true;
-
-}
-
-
-/* =========================================================
-   POINT IN GEOMETRY
-   ========================================================= */
-
-function pointInGeometry(
-    lat,
-    lng,
-    geometry
-) {
-
-    if (
-        !geometry ||
-        !geometry.coordinates
-    ) {
-
-        return false;
-
-    }
-
-
-    if (
-        geometry.type === "Polygon"
-    ) {
-
-        return pointInPolygon(
-            lat,
-            lng,
-            geometry.coordinates
         );
 
-    }
-
-
-    if (
-        geometry.type === "MultiPolygon"
-    ) {
-
-        return geometry.coordinates.some(
-
-            polygon =>
-
-                pointInPolygon(
-                    lat,
-                    lng,
-                    polygon
-                )
-
-        );
+      if (found) {
+        return found;
+      }
 
     }
-
-
-    return false;
-
-}
-
-
-/* =========================================================
-   STRICT MUNICIPALITY DETECTION
-   ========================================================= */
-
-function resolveMunicipalityByCoordinates(
-    lat,
-    lng
-) {
-
-    if (
-        !Number.isFinite(lat) ||
-        !Number.isFinite(lng)
-    ) {
-
-        return null;
-
-    }
-
-
-    for (
-        const city of CITIES
-    ) {
-
-        const features =
-            municipalityBoundaryFeatures[city] ||
-            [];
-
-
-        for (
-            const feature of features
-        ) {
-
-            if (
-                pointInGeometry(
-                    lat,
-                    lng,
-                    feature.geometry
-                )
-            ) {
-
-                return city;
-
-            }
-
-        }
-
-    }
-
 
     return null;
-
-}
-
-
-/* =========================================================
-   DISTANCE
-   ========================================================= */
-
-function distanceSquared(
-    lat1,
-    lng1,
-    lat2,
-    lng2
-) {
-
-    const dx =
-        (lng1 - lng2) *
-        Math.cos(
-            ((lat1 + lat2) / 2) *
-            Math.PI / 180
-        );
-
-    const dy =
-        lat1 - lat2;
-
-    return (
-        dx * dx +
-        dy * dy
-    );
-
-}
+  }
 
 
-/* =========================================================
-   FALLBACK MUNICIPALITY
-   =========================================================
+  /* ============================================================
+     READ GRAFANA DATA
+     ============================================================ */
 
-   IMPORTANT:
+  function readGrafanaData() {
 
-   If district is not found in JSON and its
-   coordinates are outside the exact boundary,
-   we still keep it inside the nearest
-   existing municipality.
-
-   This prevents the data from disappearing.
-
-   ========================================================= */
-
-function resolveMunicipalityFallback(
-    lat,
-    lng
-) {
+    rawData = [];
 
     if (
-        !Number.isFinite(lat) ||
-        !Number.isFinite(lng)
+      typeof data === "undefined" ||
+      !data.series ||
+      !data.series.length
     ) {
 
-        return null;
+      console.warn(
+        "No Grafana data available."
+      );
+
+      return;
 
     }
 
 
-    let bestCity = null;
+    /*
+     * Read all series.
+     */
 
-    let bestDistance = Infinity;
+    data.series.forEach(series => {
 
-
-    CITIES.forEach(city => {
-
-        const center =
-            municipalityCenters[city];
-
-
-        if (!center) {
-
-            return;
-
-        }
+      if (
+        !series ||
+        !series.fields ||
+        !series.fields.length
+      ) {
+        return;
+      }
 
 
-        const distance =
-            distanceSquared(
-                lat,
-                lng,
-                center.lat,
-                center.long
-            );
+      const fields = series.fields;
 
 
-        if (
-            distance <
-            bestDistance
-        ) {
-
-            bestDistance =
-                distance;
-
-            bestCity =
-                city;
-
-        }
-
-    });
-
-
-    return bestCity;
-
-}
-
-
-/* =========================================================
-   RESOLVE MUNICIPALITY
-   ========================================================= */
-
-function resolveMunicipality(
-    name,
-    lat,
-    lng
-) {
-
-    const cleanName =
-        String(name || "").trim();
-
-
-    /* -------------------------------------------------------
-       1. Exact district GeoJSON mapping
-       ------------------------------------------------------- */
-
-    const districtCity =
-        districtToCity[cleanName];
-
-
-    if (districtCity) {
-
-        return {
-
-            city: districtCity,
-
-            method:
-                "district-geojson"
-
-        };
-
-    }
-
-
-    const lookupCity =
-        districtToCity[
-            districtNameLookup[
-                districtLookupKey(
-                    cleanName
-                )
-            ]?.name
-        ];
-
-
-    if (lookupCity) {
-
-        return {
-
-            city: lookupCity,
-
-            method:
-                "district-normalized"
-
-        };
-
-    }
-
-
-    /* -------------------------------------------------------
-       2. Exact coordinate boundary
-       ------------------------------------------------------- */
-
-    const boundaryCity =
-        resolveMunicipalityByCoordinates(
-            lat,
-            lng
+      const municipalityField =
+        findField(
+          fields,
+          [
+            "Municipality",
+            "MunicipalityName",
+            "MunicipalityNameEn",
+            "NameEn",
+            "municipality_name",
+            "municipality"
+          ]
         );
 
 
-    if (boundaryCity) {
-
-        return {
-
-            city: boundaryCity,
-
-            method:
-                "coordinate-boundary"
-
-        };
-
-    }
-
-
-    /* -------------------------------------------------------
-       3. FALLBACK
-
-       Unknown district remains inside an
-       existing municipality.
-
-       ------------------------------------------------------- */
-
-    const fallbackCity =
-        resolveMunicipalityFallback(
-            lat,
-            lng
+      const districtField =
+        findField(
+          fields,
+          [
+            "District",
+            "DistrictName",
+            "DistrictNameEn",
+            "NameDistrict",
+            "district_name",
+            "district"
+          ]
         );
 
 
-    if (fallbackCity) {
-
-        return {
-
-            city: fallbackCity,
-
-            method:
-                "municipality-fallback"
-
-        };
-
-    }
-
-
-    return {
-
-        city: null,
-
-        method:
-            "unresolved"
-
-    };
-
-}
+      const countField =
+        findField(
+          fields,
+          [
+            "Count",
+            "count",
+            "IncidentCount",
+            "Incident_Count",
+            "Total",
+            "Value",
+            "value"
+          ]
+        );
 
 
-/* =========================================================
-   RISK STATS
-   ========================================================= */
-
-const riskStats = {
-
-    min: 0,
-
-    max: 0,
-
-    lowLimit: 0,
-
-    highLimit: 0
-
-};
+      const latitudeField =
+        findField(
+          fields,
+          [
+            "Latitude",
+            "latitude",
+            "Lat",
+            "lat"
+          ]
+        );
 
 
-/* =========================================================
-   CALCULATE GLOBAL RISK
-   ========================================================= */
-
-function calculateRiskStats() {
-
-    const values = [];
-
-
-    CITIES.forEach(city => {
-
-        (
-            municipalityIncidentRows[city] ||
-            []
-        ).forEach(row => {
-
-            const count =
-                Number(row.count || 0);
+      const longitudeField =
+        findField(
+          fields,
+          [
+            "Longitude",
+            "longitude",
+            "Lng",
+            "Lon",
+            "lng",
+            "lon"
+          ]
+        );
 
 
-            if (count > 0) {
+      if (
+        !municipalityField ||
+        !countField
+      ) {
 
-                values.push(count);
-
-            }
-
-        });
-
-    });
-
-
-    if (!values.length) {
-
-        riskStats.min = 0;
-
-        riskStats.max = 0;
-
-        riskStats.lowLimit = 0;
-
-        riskStats.highLimit = 0;
+        console.warn(
+          "Required fields not found."
+        );
 
         return;
 
-    }
+      }
 
 
-    riskStats.min =
-        Math.min(...values);
+      const rowCount =
+        municipalityField.values.length;
 
-    riskStats.max =
-        Math.max(...values);
 
+      for (
+        let i = 0;
+        i < rowCount;
+        i++
+      ) {
 
-    const range =
-        riskStats.max -
-        riskStats.min;
+        const municipality =
+          normalizeName(
+            municipalityField.values[i]
+          );
 
 
-    riskStats.lowLimit =
-        riskStats.min +
-        range * 0.33;
-
-
-    riskStats.highLimit =
-        riskStats.min +
-        range * 0.66;
-
-}
-
-
-/* =========================================================
-   RISK LEVEL
-   ========================================================= */
-
-function getRiskLevel(
-    count
-) {
-
-    count =
-        Number(count || 0);
-
-
-    if (count <= 0) {
-
-        return {
-
-            level: "No Data",
-
-            color: "#94a3b8",
-
-            className:
-                "no-data-count"
-
-        };
-
-    }
-
-
-    if (
-        riskStats.max <= 0
-    ) {
-
-        return {
-
-            level: "No Data",
-
-            color: "#94a3b8",
-
-            className:
-                "no-data-count"
-
-        };
-
-    }
-
-
-    if (
-        riskStats.max ===
-        riskStats.min
-    ) {
-
-        return {
-
-            level: "High",
-
-            color: "#dc2626",
-
-            className:
-                "high-count"
-
-        };
-
-    }
-
-
-    if (
-        count >=
-        riskStats.highLimit
-    ) {
-
-        return {
-
-            level: "High",
-
-            color: "#dc2626",
-
-            className:
-                "high-count"
-
-        };
-
-    }
-
-
-    if (
-        count >=
-        riskStats.lowLimit
-    ) {
-
-        return {
-
-            level: "Medium",
-
-            color: "#facc15",
-
-            className:
-                "medium-count"
-
-        };
-
-    }
-
-
-    return {
-
-        level: "Low",
-
-        color: "#16a34a",
-
-        className:
-            "low-count"
-
-    };
-
-}
-
-
-/* =========================================================
-   BUBBLE SIZE
-   ========================================================= */
-
-function getBubbleSize(
-    count,
-    globalMax,
-    minSize = 34,
-    maxSize = 62
-) {
-
-    count =
-        Number(count || 0);
-
-    globalMax =
-        Number(globalMax || 0);
-
-
-    if (
-        globalMax <= 0
-    ) {
-
-        return minSize;
-
-    }
-
-
-    const ratio =
-        Math.sqrt(
-            Math.max(
-                0,
-                count / globalMax
-            )
-        );
-
-
-    return Math.round(
-
-        minSize +
-
-        (
-            maxSize -
-            minSize
-        ) *
-
-        ratio
-
-    );
-
-}
-
-
-/* =========================================================
-   MAKE BUBBLE ICON
-   ========================================================= */
-
-function makeBubbleIcon(
-    count,
-    size,
-    className
-) {
-
-    const safeSize =
-        Math.max(
-            30,
-            Math.min(
-                72,
-                Number(size || 38)
-            )
-        );
-
-
-    const fontSize =
-        safeSize >= 58
-            ? 14
-            : safeSize >= 45
-                ? 12
-                : 11;
-
-
-    return L.divIcon({
-
-        className:
-            `cluster-marker ${className}`,
-
-        html: `
-
-            <div
-                class="count-circle"
-                style="
-                    width:${safeSize}px;
-                    height:${safeSize}px;
-                    font-size:${fontSize}px;
-                "
-            >
-                ${Number(count || 0).toLocaleString()}
-            </div>
-
-        `,
-
-        iconSize:
-            [
-                safeSize,
-                safeSize
-            ],
-
-        iconAnchor:
-            [
-                safeSize / 2,
-                safeSize / 2
-            ]
-
-    });
-
-}
-
-
-/* =========================================================
-   MUNICIPALITY SIZE
-   ========================================================= */
-
-function getMunicipalitySize(
-    count,
-    globalMax
-) {
-
-    return getBubbleSize(
-        count,
-        globalMax,
-        60,
-        94
-    );
-
-}
-
-
-/* =========================================================
-   MUNICIPALITY ICON
-   ========================================================= */
-
-function makeMunicipalityIcon(
-    count,
-    globalMax
-) {
-
-    const risk =
-        getRiskLevel(count);
-
-
-    const size =
-        getMunicipalitySize(
-            count,
-            globalMax
-        );
-
-
-    return L.divIcon({
-
-        className:
-            `municipality-total-marker ${risk.className}`,
-
-        html: `
-
-            <div
-                class="municipality-total-circle"
-                style="
-                    width:${size}px;
-                    height:${size}px;
-                    background:${risk.color};
-                    font-size:15px;
-                "
-            >
-                ${Number(count || 0).toLocaleString()}
-            </div>
-
-        `,
-
-        iconSize:
-            [
-                size,
-                size
-            ],
-
-        iconAnchor:
-            [
-                size / 2,
-                size / 2
-            ]
-
-    });
-
-}
-
-
-/* =========================================================
-   DISTRICT TOOLTIP
-   ========================================================= */
-
-function districtTooltipHtml(
-    name,
-    city,
-    count
-) {
-
-    const risk =
-        getRiskLevel(count);
-
-
-    return `
-
-        <div>
-
-            <b>District:</b>
-            ${name}
-
-            <br>
-
-            <b>Municipality:</b>
-            ${city}
-
-            <br>
-
-            <b>Incidents:</b>
-            ${Number(count || 0).toLocaleString()}
-
-            <br>
-
-            <b>Risk:</b>
-            ${risk.level}
-
-        </div>
-
-    `;
-
-}
-
-
-/* =========================================================
-   CLUSTER TOOLTIP
-   ========================================================= */
-
-function clusterTooltipHtml(
-    label,
-    count,
-    level,
-    itemCount
-) {
-
-    const risk =
-        getRiskLevel(count);
-
-
-    return `
-
-        <div>
-
-            <b>${label}</b>
-
-            <br>
-
-            <b>Incidents:</b>
-            ${Number(count || 0).toLocaleString()}
-
-            <br>
-
-            <b>Risk:</b>
-            ${risk.level}
-
-            <br>
-
-            <b>Locations:</b>
-            ${itemCount}
-
-            <br><br>
-
-            <b>Click bubble to drill down</b>
-
-        </div>
-
-    `;
-
-}
-
-
-/* =========================================================
-   MUNICIPALITY TOOLTIP
-   ========================================================= */
-
-function municipalityTooltipHtml(
-    city
-) {
-
-    const count =
-        municipalityTotals[city] || 0;
-
-
-    const risk =
-        getRiskLevel(count);
-
-
-    return `
-
-        <div>
-
-            <b>Municipality:</b>
-            ${city}
-
-            <br>
-
-            <b>Total Incidents:</b>
-            ${count.toLocaleString()}
-
-            <br>
-
-            <b>Risk:</b>
-            ${risk.level}
-
-            <br><br>
-
-            <b>Click to divide into 3 groups</b>
-
-        </div>
-
-    `;
-
-}
-
-
-/* =========================================================
-   HIDE MUNICIPALITY MARKERS
-   ========================================================= */
-
-function hideMunicipalityMarkers() {
-
-    Object.values(
-        municipalityMarkers
-    ).forEach(marker => {
-
-        if (
-            incidentBubbleLayer.hasLayer(
-                marker
-            )
-        ) {
-
-            incidentBubbleLayer.removeLayer(
-                marker
-            );
-
-        }
-
-    });
-
-}
-
-
-/* =========================================================
-   CLEAR ALL BUBBLES
-   ========================================================= */
-
-function clearBubbleLayer() {
-
-    incidentBubbleLayer.clearLayers();
-
-}
-
-
-/* =========================================================
-   CREATE MUNICIPALITY MARKERS
-   ========================================================= */
-
-function createMunicipalityMarkers() {
-
-    clearBubbleLayer();
-
-
-    const globalMax =
-        Math.max(
-
-            ...CITIES.map(
-                city =>
-                    municipalityTotals[city] || 0
-            ),
-
-            1
-
-        );
-
-
-    CITIES.forEach(city => {
-
-        const center =
-            municipalityCenters[city];
-
-
-        if (!center) {
-
-            return;
-
-        }
+        const district =
+          districtField
+            ? normalizeName(
+                districtField.values[i]
+              )
+            : "";
 
 
         const count =
-            municipalityTotals[city] || 0;
+          Number(
+            countField.values[i]
+          ) || 0;
 
 
-        const marker =
-            L.marker(
-
-                [
-                    center.lat,
-                    center.long
-                ],
-
-                {
-
-                    icon:
-                        makeMunicipalityIcon(
-                            count,
-                            globalMax
-                        ),
-
-                    zIndexOffset:
-                        2000,
-
-                    interactive:
-                        true
-
-                }
-
-            );
+        const latitude =
+          latitudeField
+            ? Number(
+                latitudeField.values[i]
+              )
+            : NaN;
 
 
-        marker.bindTooltip(
-
-            municipalityTooltipHtml(
-                city
-            ),
-
-            {
-
-                sticky: true,
-
-                direction: "top",
-
-                opacity: 0.95,
-
-                className:
-                    "custom-tooltip"
-
-            }
-
-        );
+        const longitude =
+          longitudeField
+            ? Number(
+                longitudeField.values[i]
+              )
+            : NaN;
 
 
-        marker.on(
-            "click",
-            function() {
-
-                showMunicipality(
-                    city
-                );
-
-            }
-        );
+        if (!municipality) {
+          continue;
+        }
 
 
-        municipalityMarkers[city] =
-            marker;
+        rawData.push({
 
+          municipality,
 
-        incidentBubbleLayer.addLayer(
-            marker
-        );
+          district,
+
+          count,
+
+          latitude,
+
+          longitude
+
+        });
+
+      }
 
     });
 
-}
+
+    console.log(
+      "Map records:",
+      rawData.length
+    );
+
+  }
 
 
-/* =========================================================
-   GET CENTROID
-   ========================================================= */
+  /* ============================================================
+     GROUP DATA
+     ============================================================ */
 
-function getCentroid(
-    rows
-) {
+  function groupBy(array, keyFunction) {
+
+    const result = new Map();
+
+
+    array.forEach(item => {
+
+      const key =
+        keyFunction(item);
+
+
+      if (!result.has(key)) {
+
+        result.set(
+          key,
+          []
+        );
+
+      }
+
+
+      result
+        .get(key)
+        .push(item);
+
+    });
+
+
+    return result;
+
+  }
+
+
+  /* ============================================================
+     AGGREGATE
+     ============================================================ */
+
+  function aggregateRows(rows) {
+
+    const groups =
+      groupBy(
+        rows,
+        row => {
+
+          const municipality =
+            lower(row.municipality);
+
+          const district =
+            lower(row.district);
+
+          return municipality +
+            "||" +
+            district;
+
+        }
+      );
+
+
+    const result = [];
+
+
+    groups.forEach(
+      groupRows => {
+
+        let count = 0;
+
+        let latSum = 0;
+
+        let lonSum = 0;
+
+        let coordinateCount = 0;
+
+
+        groupRows.forEach(row => {
+
+          count +=
+            Number(row.count) || 0;
+
+
+          if (
+            Number.isFinite(
+              row.latitude
+            ) &&
+            Number.isFinite(
+              row.longitude
+            )
+          ) {
+
+            latSum +=
+              row.latitude;
+
+            lonSum +=
+              row.longitude;
+
+            coordinateCount++;
+
+          }
+
+        });
+
+
+        const first =
+          groupRows[0];
+
+
+        result.push({
+
+          municipality:
+            first.municipality,
+
+          district:
+            first.district,
+
+          count,
+
+          latitude:
+            coordinateCount
+              ? latSum /
+                coordinateCount
+              : NaN,
+
+          longitude:
+            coordinateCount
+              ? lonSum /
+                coordinateCount
+              : NaN
+
+        });
+
+      }
+    );
+
+
+    return result;
+
+  }
+
+
+  /* ============================================================
+     CALCULATE RISK
+     
+     IMPORTANT:
+     THIS FUNCTION IS CALLED AGAIN AT EVERY LEVEL.
+     
+     Therefore:
+     
+     Municipality colors are calculated independently.
+     Bubble colors are calculated independently.
+     District colors are calculated independently.
+     Sub-bubble colors are calculated independently.
+     ============================================================ */
+
+  function calculateRisk(items) {
+
+    if (!items || !items.length) {
+      return items;
+    }
+
+
+    const values =
+      items.map(
+        item =>
+          Number(item.count) || 0
+      );
+
+
+    const sorted =
+      [...values]
+        .sort(
+          (a, b) => a - b
+        );
+
+
+    /*
+     * IMPORTANT:
+     *
+     * We calculate thirds using the CURRENT LEVEL only.
+     *
+     * This means a district does NOT use the municipality
+     * threshold.
+     *
+     * Every layer gets its own Red / Yellow / Green.
+     */
+
+    const n =
+      sorted.length;
+
+
+    const lowIndex =
+      Math.max(
+        0,
+        Math.floor(n / 3) - 1
+      );
+
+
+    const highIndex =
+      Math.max(
+        0,
+        Math.floor(
+          (2 * n) / 3
+        ) - 1
+      );
+
+
+    const lowThreshold =
+      sorted[lowIndex] ?? 0;
+
+
+    const highThreshold =
+      sorted[highIndex] ?? 0;
+
+
+    return items.map(item => {
+
+      const value =
+        Number(item.count) || 0;
+
+
+      let risk;
+
+
+      /*
+       * High
+       */
+
+      if (
+        value >=
+        highThreshold
+      ) {
+
+        risk = "HIGH";
+
+      }
+
+      /*
+       * Medium
+       */
+
+      else if (
+        value >=
+        lowThreshold
+      ) {
+
+        risk = "MEDIUM";
+
+      }
+
+      /*
+       * Low
+       */
+
+      else {
+
+        risk = "LOW";
+
+      }
+
+
+      return {
+
+        ...item,
+
+        risk
+
+      };
+
+    });
+
+  }
+
+
+  /* ============================================================
+     IMPROVED RISK CALCULATION
+     
+     Handles cases where all values are equal.
+     ============================================================ */
+
+  function applyRisk(items) {
+
+    if (!items || !items.length) {
+      return [];
+    }
+
+
+    const values =
+      items
+        .map(
+          x =>
+            Number(x.count) || 0
+        )
+        .sort(
+          (a, b) => a - b
+        );
+
+
+    const min =
+      values[0];
+
+
+    const max =
+      values[
+        values.length - 1
+      ];
+
+
+    /*
+     * Only one value.
+     */
 
     if (
-        !rows ||
-        !rows.length
+      values.length === 1
     ) {
 
-        return null;
+      return items.map(
+        x => ({
+          ...x,
+          risk: "HIGH"
+        })
+      );
 
     }
 
 
-    let lat = 0;
+    /*
+     * All values equal.
+     *
+     * Keep them medium rather than incorrectly
+     * making every item high.
+     */
 
-    let lng = 0;
+    if (min === max) {
 
-
-    rows.forEach(row => {
-
-        lat +=
-            Number(row.lat || 0);
-
-        lng +=
-            Number(row.lng || 0);
-
-    });
-
-
-    return {
-
-        lat:
-            lat / rows.length,
-
-        lng:
-            lng / rows.length
-
-    };
-
-}
-
-
-/* =========================================================
-   CREATE FALLBACK COORDINATE
-   =========================================================
-
-   Used when an unmatched district has no
-   valid coordinate.
-
-   It stays inside the municipality.
-
-   ========================================================= */
-
-function fallbackCoordinate(
-    city,
-    index,
-    total
-) {
-
-    const center =
-        municipalityCenters[city];
-
-
-    if (!center) {
-
-        return null;
+      return items.map(
+        x => ({
+          ...x,
+          risk: "MEDIUM"
+        })
+      );
 
     }
 
 
-    const angle =
-        (
-            index /
-            Math.max(total, 1)
-        ) *
+    /*
+     * Percentile / rank based classification.
+     *
+     * This guarantees that every level gets
+     * its own three-color classification.
+     */
 
-        Math.PI * 2;
-
-
-    const radius =
-        0.008;
-
-
-    return {
-
-        lat:
-            center.lat +
-            Math.sin(angle) *
-            radius,
-
-        lng:
-            center.long +
-            Math.cos(angle) *
-            radius
-
-    };
-
-}
+    const ranked =
+      items
+        .map(
+          (item, index) => ({
+            item,
+            index,
+            value:
+              Number(item.count) || 0
+          })
+        )
+        .sort(
+          (a, b) =>
+            a.value - b.value
+        );
 
 
-/* =========================================================
-   PREPARE ROW COORDINATES
-   ========================================================= */
-
-function prepareRows(
-    rows,
-    city
-) {
-
-    return rows.map(
-        (row, index) => {
-
-            let lat =
-                Number(row.lat);
-
-            let lng =
-                Number(row.lng);
+    const total =
+      ranked.length;
 
 
-            if (
-                !Number.isFinite(lat) ||
-                !Number.isFinite(lng)
-            ) {
-
-                const fallback =
-                    fallbackCoordinate(
-                        city,
-                        index,
-                        rows.length
-                    );
+    const result =
+      new Array(total);
 
 
-                if (fallback) {
+    ranked.forEach(
+      (entry, rank) => {
 
-                    lat =
-                        fallback.lat;
-
-                    lng =
-                        fallback.lng;
-
-                }
-
-            }
+        let risk;
 
 
-            return {
+        const percentile =
+          total === 1
+            ? 1
+            : rank /
+              (total - 1);
 
-                ...row,
 
-                lat,
+        if (
+          percentile >=
+          0.666666
+        ) {
 
-                lng,
+          risk = "HIGH";
 
-                city
+        }
+        else if (
+          percentile >=
+          0.333333
+        ) {
 
-            };
+          risk = "MEDIUM";
+
+        }
+        else {
+
+          risk = "LOW";
 
         }
 
+
+        result[
+          entry.index
+        ] = {
+
+          ...entry.item,
+
+          risk
+
+        };
+
+      }
     );
 
-}
+
+    return result;
+
+  }
 
 
-/* =========================================================
-   DISTANCE BETWEEN TWO POINTS
-   ========================================================= */
+  /* ============================================================
+     COLOR
+     ============================================================ */
 
-function pointDistance(
-    a,
-    b
-) {
-
-    return distanceSquared(
-        a.lat,
-        a.lng,
-        b.lat,
-        b.lng
-    );
-
-}
-
-
-/* =========================================================
-   SIMPLE 3-WAY SPATIAL CLUSTERING
-   =========================================================
-
-   Deterministic geographic clustering.
-
-   It does NOT put all markers on top
-   of each other.
-
-   ========================================================= */
-
-function splitIntoThree(
-    rows
-) {
+  function riskColor(risk) {
 
     if (
-        !rows ||
-        rows.length <= 1
+      risk === "HIGH"
     ) {
 
-        return rows && rows.length
-            ? [rows]
-            : [];
+      return CONFIG.COLORS.HIGH;
 
     }
 
 
     if (
-        rows.length === 2
+      risk === "MEDIUM"
     ) {
 
-        return [
-            [rows[0]],
-            [rows[1]]
-        ];
+      return CONFIG.COLORS.MEDIUM;
 
     }
 
 
-    const centroid =
-        getCentroid(rows);
+    return CONFIG.COLORS.LOW;
+
+  }
 
 
-    if (!centroid) {
+  /* ============================================================
+     BUBBLE SIZE
+     ============================================================ */
 
-        return [rows];
+  function calculateRadius(
+    value,
+    minValue,
+    maxValue
+  ) {
+
+    if (
+      minValue === maxValue
+    ) {
+
+      return (
+        CONFIG.MIN_RADIUS +
+        CONFIG.MAX_RADIUS
+      ) / 2;
 
     }
 
 
-    /* -------------------------------------------------------
-       Sort by angle around centroid
-       ------------------------------------------------------- */
+    const normalized =
+      (
+        value -
+        minValue
+      ) /
+      (
+        maxValue -
+        minValue
+      );
+
+
+    return (
+      CONFIG.MIN_RADIUS +
+      normalized *
+      (
+        CONFIG.MAX_RADIUS -
+        CONFIG.MIN_RADIUS
+      )
+    );
+
+  }
+
+
+  /* ============================================================
+     CREATE DIV ICON
+     ============================================================ */
+
+  function createBubbleIcon(
+    item,
+    radius
+  ) {
+
+    const colorClass =
+      item.risk === "HIGH"
+        ? "risk-high"
+        : item.risk === "MEDIUM"
+          ? "risk-medium"
+          : "risk-low";
+
+
+    const displayName =
+      item.name ||
+      item.district ||
+      item.municipality ||
+      "Unknown";
+
+
+    const size =
+      radius * 2;
+
+
+    return L.divIcon({
+
+      className: "",
+
+      html: `
+        <div
+          class="risk-bubble ${colorClass}"
+          style="
+            width:${size}px;
+            height:${size}px;
+            margin-left:${-radius}px;
+            margin-top:${-radius}px;
+          "
+        >
+          <div class="bubble-label">
+
+            <div class="bubble-name">
+              ${escapeHtml(
+                displayName
+              )}
+            </div>
+
+            <div class="bubble-count">
+              ${formatNumber(
+                item.count
+              )}
+            </div>
+
+          </div>
+        </div>
+      `,
+
+      iconSize: [
+        size,
+        size
+      ],
+
+      iconAnchor: [
+        radius,
+        radius
+      ]
+
+    });
+
+  }
+
+
+  /* ============================================================
+     ESCAPE HTML
+     ============================================================ */
+
+  function escapeHtml(value) {
+
+    return String(value)
+      .replace(
+        /&/g,
+        "&amp;"
+      )
+      .replace(
+        /</g,
+        "&lt;"
+      )
+      .replace(
+        />/g,
+        "&gt;"
+      )
+      .replace(
+        /"/g,
+        "&quot;"
+      )
+      .replace(
+        /'/g,
+        "&#039;"
+      );
+
+  }
+
+
+  /* ============================================================
+     NUMBER FORMAT
+     ============================================================ */
+
+  function formatNumber(value) {
+
+    return Number(
+      value || 0
+    ).toLocaleString();
+
+  }
+
+
+  /* ============================================================
+     CREATE SAFE COORDINATE
+     
+     Prevent exact overlap.
+     ============================================================ */
+
+  function spreadCoordinates(
+    items
+  ) {
+
+    const output =
+      items.map(
+        item => ({
+          ...item
+        })
+      );
+
+
+    const coordinateGroups =
+      new Map();
+
+
+    output.forEach(
+      (item, index) => {
+
+        if (
+          !Number.isFinite(
+            item.latitude
+          ) ||
+          !Number.isFinite(
+            item.longitude
+          )
+        ) {
+
+          return;
+
+        }
+
+
+        const key =
+          item.latitude.toFixed(5) +
+          "_" +
+          item.longitude.toFixed(5);
+
+
+        if (
+          !coordinateGroups.has(key)
+        ) {
+
+          coordinateGroups.set(
+            key,
+            []
+          );
+
+        }
+
+
+        coordinateGroups
+          .get(key)
+          .push(index);
+
+      }
+    );
+
+
+    coordinateGroups.forEach(
+      indexes => {
+
+        if (
+          indexes.length <= 1
+        ) {
+          return;
+        }
+
+
+        indexes.forEach(
+          (index, position) => {
+
+            const angle =
+              (
+                position /
+                indexes.length
+              ) *
+              Math.PI *
+              2;
+
+
+            const distance =
+              CONFIG.SEPARATION_FACTOR *
+              (
+                0.5 +
+                Math.floor(
+                  position /
+                  6
+                )
+              );
+
+
+            output[
+              index
+            ].latitude +=
+              Math.sin(angle) *
+              distance;
+
+
+            output[
+              index
+            ].longitude +=
+              Math.cos(angle) *
+              distance;
+
+          }
+        );
+
+      }
+    );
+
+
+    return output;
+
+  }
+
+
+  /* ============================================================
+     CREATE THREE BUBBLES
+     
+     This is the important part.
+     
+     Every parent can split into THREE children.
+     ============================================================ */
+
+  function createThreeBubbles(
+    parentRows,
+    parentCenter
+  ) {
+
+    if (
+      !parentRows ||
+      !parentRows.length
+    ) {
+
+      return [];
+
+    }
+
+
+    /*
+     * Sort highest to lowest.
+     */
 
     const sorted =
-        [...rows].sort(
-            (a, b) => {
-
-                const angleA =
-                    Math.atan2(
-                        a.lat -
-                        centroid.lat,
-
-                        a.lng -
-                        centroid.lng
-                    );
-
-
-                const angleB =
-                    Math.atan2(
-                        b.lat -
-                        centroid.lat,
-
-                        b.lng -
-                        centroid.lng
-                    );
-
-
-                return angleA - angleB;
-
-            }
+      [...parentRows]
+        .sort(
+          (a, b) =>
+            Number(b.count) -
+            Number(a.count)
         );
 
 
-    /* -------------------------------------------------------
-       Split into 3 balanced groups
-       ------------------------------------------------------- */
+    /*
+     * Create exactly three groups.
+     */
 
     const groups = [
-        [],
-        [],
-        []
+      [],
+      [],
+      []
     ];
 
 
     sorted.forEach(
-        (row, index) => {
+      (row, index) => {
 
-            groups[
-                index % 3
-            ].push(row);
+        groups[
+          index % 3
+        ].push(row);
 
-        }
+      }
     );
 
 
-    return groups.filter(
-        group =>
-            group.length > 0
-    );
-
-}
+    const result = [];
 
 
-/* =========================================================
-   CREATE CLUSTER OBJECTS
-   ========================================================= */
+    groups.forEach(
+      (group, index) => {
 
-function createClusters(
-    rows
-) {
+        if (
+          !group.length
+        ) {
 
-    const groups =
-        splitIntoThree(rows);
-
-
-    return groups.map(
-        (items, index) => {
-
-            const total =
-                items.reduce(
-
-                    (sum, row) =>
-
-                        sum +
-                        Number(
-                            row.count || 0
-                        ),
-
-                    0
-
-                );
-
-
-            const center =
-                getCentroid(items);
-
-
-            return {
-
-                id:
-                    `${Date.now()}_${index}_${Math.random()}`,
-
-                index,
-
-                items,
-
-                count:
-                    total,
-
-                lat:
-                    center
-                        ? center.lat
-                        : null,
-
-                lng:
-                    center
-                        ? center.lng
-                        : null
-
-            };
+          return;
 
         }
 
+
+        let count = 0;
+
+        let latSum = 0;
+
+        let lonSum = 0;
+
+        let coordCount = 0;
+
+
+        group.forEach(
+          row => {
+
+            count +=
+              Number(row.count) || 0;
+
+
+            if (
+              Number.isFinite(
+                row.latitude
+              ) &&
+              Number.isFinite(
+                row.longitude
+              )
+            ) {
+
+              latSum +=
+                row.latitude;
+
+              lonSum +=
+                row.longitude;
+
+              coordCount++;
+
+            }
+
+          }
+        );
+
+
+        let latitude =
+          coordCount
+            ? latSum /
+              coordCount
+            : parentCenter[0];
+
+
+        let longitude =
+          coordCount
+            ? lonSum /
+              coordCount
+            : parentCenter[1];
+
+
+        /*
+         * Move the three bubbles apart.
+         */
+
+        const angle =
+          (
+            index *
+            120
+          ) *
+          Math.PI /
+          180;
+
+
+        const distance =
+          0.008;
+
+
+        latitude +=
+          Math.sin(angle) *
+          distance;
+
+
+        longitude +=
+          Math.cos(angle) *
+          distance;
+
+
+        result.push({
+
+          name:
+            "Cluster " +
+            (index + 1),
+
+          clusterIndex:
+            index,
+
+          count,
+
+          latitude,
+
+          longitude,
+
+          rows:
+            group
+
+        });
+
+      }
     );
 
-}
+
+    /*
+     * VERY IMPORTANT:
+     *
+     * Color is calculated AGAIN here.
+     *
+     * It does NOT inherit municipality color.
+     */
+
+    const colored =
+      applyRisk(result);
 
 
-/* =========================================================
-   CREATE CLUSTER MARKER
-   ========================================================= */
+    return colored;
 
-function createClusterMarker(
-    cluster,
-    level,
-    city
-) {
+  }
+
+
+  /* ============================================================
+     DRAW BUBBLES
+     ============================================================ */
+
+  function drawBubbles(
+    items,
+    title,
+    clickHandler
+  ) {
+
+    activeLayerGroup.clearLayers();
+
 
     if (
-        !cluster ||
-        !Number.isFinite(cluster.lat) ||
-        !Number.isFinite(cluster.lng)
+      !items ||
+      !items.length
     ) {
 
-        return null;
+      header.textContent =
+        title;
+
+      return;
 
     }
 
 
-    const allCounts =
-        currentClusters.map(
-            item =>
-                Number(item.count || 0)
-        );
+    /*
+     * Remove items without coordinates
+     * where possible.
+     */
+
+    let validItems =
+      items.filter(
+        item =>
+          Number.isFinite(
+            item.latitude
+          ) &&
+          Number.isFinite(
+            item.longitude
+          )
+      );
 
 
-    const globalMax =
-        Math.max(
-            ...allCounts,
-            1
-        );
+    /*
+     * If coordinates are missing,
+     * use map center.
+     */
+
+    if (
+      validItems.length !==
+      items.length
+    ) {
+
+      const center =
+        map.getCenter();
 
 
-    const risk =
-        getRiskLevel(
-            cluster.count
-        );
+      items.forEach(
+        item => {
 
-
-    const size =
-        level === 1
-
-            ? getBubbleSize(
-                cluster.count,
-                globalMax,
-                44,
-                70
+          if (
+            !Number.isFinite(
+              item.latitude
+            ) ||
+            !Number.isFinite(
+              item.longitude
             )
+          ) {
 
-            : getBubbleSize(
-                cluster.count,
-                globalMax,
-                38,
-                62
-            );
+            item.latitude =
+              center.lat;
+
+            item.longitude =
+              center.lng;
+
+          }
+
+        }
+      );
 
 
-    const marker =
-        L.marker(
+      validItems =
+        items;
 
+    }
+
+
+    /*
+     * Spread overlapping points.
+     */
+
+    validItems =
+      spreadCoordinates(
+        validItems
+      );
+
+
+    const values =
+      validItems.map(
+        x =>
+          Number(x.count) || 0
+      );
+
+
+    const minValue =
+      Math.min(
+        ...values
+      );
+
+
+    const maxValue =
+      Math.max(
+        ...values
+      );
+
+
+    /*
+     * APPLY RISK AGAIN AT THIS LAYER.
+     *
+     * This is what guarantees:
+     *
+     * Municipality = own colors
+     * Cluster = own colors
+     * Sub-cluster = own colors
+     * District = own colors
+     */
+
+    validItems =
+      applyRisk(
+        validItems
+      );
+
+
+    validItems.forEach(
+      item => {
+
+        const radius =
+          calculateRadius(
+            Number(item.count) || 0,
+            minValue,
+            maxValue
+          );
+
+
+        const marker =
+          L.marker(
             [
-                cluster.lat,
-                cluster.lng
+              item.latitude,
+              item.longitude
             ],
-
             {
-
-                icon:
-                    makeBubbleIcon(
-                        cluster.count,
-                        size,
-                        risk.className
-                    ),
-
-                zIndexOffset:
-                    1500 +
-
-                    (
-                        100 -
-                        level * 10
-                    ),
-
-                interactive:
-                    true
-
-            }
-
-        );
-
-
-    marker.bindTooltip(
-
-        clusterTooltipHtml(
-
-            level === 1
-                ? `Group ${cluster.index + 1}`
-                : `Sub-group ${cluster.index + 1}`,
-
-            cluster.count,
-
-            level,
-
-            cluster.items.length
-
-        ),
-
-        {
-
-            sticky: true,
-
-            direction: "top",
-
-            opacity: 0.95,
-
-            className:
-                "custom-tooltip"
-
-        }
-
-    );
-
-
-    marker.on(
-        "click",
-        function() {
-
-            if (
-                level === 1
-            ) {
-
-                showSecondLevel(
-                    cluster,
-                    city
-                );
-
-            }
-
-            else {
-
-                showDistrictLevel(
-                    cluster,
-                    city
-                );
-
-            }
-
-        }
-    );
-
-
-    return marker;
-
-}
-
-
-/* =========================================================
-   SHOW MUNICIPALITY
-   ========================================================= */
-
-function showMunicipality(
-    city
-) {
-
-    selectedMunicipality =
-        city;
-
-    selectedCluster =
-        null;
-
-    selectedSubCluster =
-        null;
-
-    drillLevel = 1;
-
-
-    clearBubbleLayer();
-
-
-    const rows =
-        prepareRows(
-
-            municipalityIncidentRows[city] ||
-            [],
-
-            city
-
-        );
-
-
-    if (!rows.length) {
-
-        updateMapInfo(
-            `${city} — No incident data`
-        );
-
-        updateBackButton();
-
-        return;
-
-    }
-
-
-    currentClusters =
-        createClusters(rows);
-
-
-    currentClusters.forEach(
-        cluster => {
-
-            const marker =
-                createClusterMarker(
-                    cluster,
-                    1,
-                    city
-                );
-
-
-            if (marker) {
-
-                incidentBubbleLayer.addLayer(
-                    marker
-                );
-
-            }
-
-        }
-    );
-
-
-    const boundary =
-        municipalityBoundaryLayers[city];
-
-
-    if (boundary) {
-
-        map.fitBounds(
-
-            boundary.getBounds(),
-
-            {
-
-                padding:
-                    [60, 60],
-
-                maxZoom:
-                    13
-
-            }
-
-        );
-
-    }
-
-
-    updateMapInfo(
-
-        `<b>${city}</b>
-         &nbsp; → &nbsp;
-         Click one of the 3 groups`
-
-    );
-
-
-    updateBackButton();
-
-}
-
-
-/* =========================================================
-   SHOW SECOND LEVEL
-   ========================================================= */
-
-function showSecondLevel(
-    cluster,
-    city
-) {
-
-    selectedCluster =
-        cluster;
-
-    selectedSubCluster =
-        null;
-
-    drillLevel = 2;
-
-
-    clearBubbleLayer();
-
-
-    currentClusters =
-        createClusters(
-            cluster.items
-        );
-
-
-    currentClusters.forEach(
-        subCluster => {
-
-            const marker =
-                createClusterMarker(
-                    subCluster,
-                    2,
-                    city
-                );
-
-
-            if (marker) {
-
-                incidentBubbleLayer.addLayer(
-                    marker
-                );
-
-            }
-
-        }
-    );
-
-
-    const points =
-        cluster.items.filter(
-
-            item =>
-
-                Number.isFinite(item.lat) &&
-                Number.isFinite(item.lng)
-
-        );
-
-
-    if (points.length) {
-
-        const bounds =
-            L.latLngBounds(
-
-                points.map(
-                    item =>
-                        [
-                            item.lat,
-                            item.lng
-                        ]
-                )
-
-            );
-
-
-        if (
-            bounds.isValid()
-        ) {
-
-            map.fitBounds(
-
-                bounds,
-
-                {
-
-                    padding:
-                        [80, 80],
-
-                    maxZoom:
-                        15
-
-                }
-
-            );
-
-        }
-
-    }
-
-
-    updateMapInfo(
-
-        `<b>${city}</b>
-         &nbsp; → &nbsp;
-         Group ${cluster.index + 1}
-         &nbsp; → &nbsp;
-         Click one of the 3 sub-groups`
-
-    );
-
-
-    updateBackButton();
-
-}
-
-
-/* =========================================================
-   FINAL DISTRICT LEVEL
-   ========================================================= */
-
-function showDistrictLevel(
-    cluster,
-    city
-) {
-
-    selectedSubCluster =
-        cluster;
-
-    drillLevel = 3;
-
-
-    clearBubbleLayer();
-
-
-    const rows =
-        cluster.items || [];
-
-
-    if (!rows.length) {
-
-        updateMapInfo(
-            `${city} → No districts`
-        );
-
-        updateBackButton();
-
-        return;
-
-    }
-
-
-    const globalMax =
-        Math.max(
-
-            ...rows.map(
-                row =>
-                    Number(
-                        row.count || 0
-                    )
-            ),
-
-            1
-
-        );
-
-
-    rows.forEach(
-        row => {
-
-            if (
-                !Number.isFinite(row.lat) ||
-                !Number.isFinite(row.lng)
-            ) {
-
-                return;
-
-            }
-
-
-            const risk =
-                getRiskLevel(
-                    row.count
-                );
-
-
-            const size =
-                getBubbleSize(
-                    row.count,
-                    globalMax,
-                    30,
-                    58
-                );
-
-
-            const marker =
-                L.marker(
-
-                    [
-                        row.lat,
-                        row.lng
-                    ],
-
-                    {
-
-                        icon:
-                            makeBubbleIcon(
-                                row.count,
-                                size,
-                                risk.className
-                            ),
-
-                        zIndexOffset:
-                            1200,
-
-                        interactive:
-                            true
-
-                    }
-
-                );
-
-
-            marker.bindTooltip(
-
-                districtTooltipHtml(
-
-                    row.name,
-
-                    city,
-
-                    row.count
-
+              icon:
+                createBubbleIcon(
+                  item,
+                  radius
                 ),
 
-                {
+              keyboard: false,
 
-                    sticky: true,
+              zIndexOffset:
+                Math.round(
+                  item.count
+                )
 
-                    direction: "top",
-
-                    opacity: 0.95,
-
-                    className:
-                        "custom-tooltip"
-
-                }
-
-            );
+            }
+          );
 
 
-            marker.on(
-                "click",
-                function() {
-
-                    window.parent.postMessage(
-
-                        {
-
-                            type:
-                                "mapClick",
-
-                            state:
-                                row.name,
-
-                            municipality:
-                                city,
-
-                            lat:
-                                row.lat,
-
-                            long:
-                                row.lng
-
-                        },
-
-                        "*"
-
-                    );
-
-                }
-
-            );
-
-
-            incidentBubbleLayer.addLayer(
-                marker
-            );
-
-        }
-
-    );
-
-
-    const points =
-        rows.filter(
-
-            row =>
-
-                Number.isFinite(row.lat) &&
-                Number.isFinite(row.lng)
-
+        marker.bindTooltip(
+          `
+            <b>
+              ${escapeHtml(
+                item.name ||
+                item.district ||
+                item.municipality ||
+                ""
+              )}
+            </b>
+            <br>
+            Count:
+            ${formatNumber(
+              item.count
+            )}
+            <br>
+            Risk:
+            ${item.risk}
+          `,
+          {
+            direction: "top",
+            offset: [0, -radius]
+          }
         );
 
 
-    if (points.length) {
+        marker.on(
+          "click",
+          function () {
 
-        const bounds =
-            L.latLngBounds(
+            clickHandler(item);
 
-                points.map(
-                    row =>
-                        [
-                            row.lat,
-                            row.lng
-                        ]
-                )
-
-            );
+          }
+        );
 
 
-        if (
-            bounds.isValid()
-        ) {
+        activeLayerGroup.addLayer(
+          marker
+        );
 
-            map.fitBounds(
-
-                bounds,
-
-                {
-
-                    padding:
-                        [70, 70],
-
-                    maxZoom:
-                        17
-
-                }
-
-            );
-
-        }
-
-    }
-
-
-    updateMapInfo(
-
-        `<b>${city}</b>
-         &nbsp; → &nbsp;
-         Group
-         &nbsp; → &nbsp;
-         Sub-group
-         &nbsp; → &nbsp;
-         <b>Districts</b>`
-
+      }
     );
 
 
-    updateBackButton();
+    header.textContent =
+      title;
 
-}
+  }
 
 
-/* =========================================================
-   BACK BUTTON
-   ========================================================= */
+  /* ============================================================
+     MUNICIPALITY LEVEL
+     ============================================================ */
 
-const backControl =
-    L.control({
+  function showMunicipalities() {
 
-        position:
-            "topright"
+    currentLevel =
+      "municipality";
+
+    currentParent =
+      null;
+
+
+    navigationStack =
+      [];
+
+
+    backButton.style.display =
+      "none";
+
+
+    /*
+     * Group everything by municipality.
+     */
+
+    const municipalityGroups =
+      groupBy(
+        rawData,
+        row =>
+          lower(
+            row.municipality
+          )
+      );
+
+
+    const municipalities = [];
+
+
+    municipalityGroups.forEach(
+      rows => {
+
+        let count = 0;
+
+        let latSum = 0;
+
+        let lonSum = 0;
+
+        let coordinateCount = 0;
+
+
+        rows.forEach(
+          row => {
+
+            count +=
+              Number(row.count) || 0;
+
+
+            if (
+              Number.isFinite(
+                row.latitude
+              ) &&
+              Number.isFinite(
+                row.longitude
+              )
+            ) {
+
+              latSum +=
+                row.latitude;
+
+              lonSum +=
+                row.longitude;
+
+              coordinateCount++;
+
+            }
+
+          }
+        );
+
+
+        const first =
+          rows[0];
+
+
+        municipalities.push({
+
+          name:
+            first.municipality,
+
+          municipality:
+            first.municipality,
+
+          count,
+
+          latitude:
+            coordinateCount
+              ? latSum /
+                coordinateCount
+              : NaN,
+
+          longitude:
+            coordinateCount
+              ? lonSum /
+                coordinateCount
+              : NaN,
+
+          rows
+
+        });
+
+      }
+    );
+
+
+    /*
+     * MUNICIPALITY COLOR CALCULATION.
+     */
+
+    const colored =
+      applyRisk(
+        municipalities
+      );
+
+
+    drawBubbles(
+      colored,
+      "Municipalities",
+      openMunicipality
+    );
+
+
+    /*
+     * Fit map.
+     */
+
+    fitItems(
+      colored
+    );
+
+  }
+
+
+  /* ============================================================
+     OPEN MUNICIPALITY
+     ============================================================ */
+
+  function openMunicipality(
+    municipality
+  ) {
+
+    navigationStack.push({
+
+      level:
+        currentLevel,
+
+      parent:
+        currentParent
 
     });
 
 
-backControl.onAdd =
-    function() {
+    currentLevel =
+      "municipality";
 
-        const div =
-            L.DomUtil.create(
-
-                "div",
-
-                "map-back-button"
-
-            );
+    currentParent =
+      municipality;
 
 
-        div.innerHTML =
-            "← Back";
+    backButton.style.display =
+      "block";
 
 
-        div.style.display =
-            "none";
+    /*
+     * IMPORTANT:
+     *
+     * The municipality's rows are split into
+     * THREE groups.
+     */
+
+    const bubbles =
+      createThreeBubbles(
+        municipality.rows,
+        [
+          municipality.latitude,
+          municipality.longitude
+        ]
+      );
 
 
-        L.DomEvent.disableClickPropagation(
-            div
-        );
+    /*
+     * Color was recalculated by createThreeBubbles().
+     */
+
+    drawBubbles(
+      bubbles,
+      municipality.name +
+      " → Clusters",
+      openCluster
+    );
 
 
-        div.addEventListener(
-            "click",
-            function() {
+    fitItems(
+      bubbles
+    );
 
-                handleBack();
+  }
+
+
+  /* ============================================================
+     OPEN CLUSTER
+     ============================================================ */
+
+  function openCluster(
+    cluster
+  ) {
+
+    navigationStack.push({
+
+      level:
+        currentLevel,
+
+      parent:
+        currentParent
+
+    });
+
+
+    currentLevel =
+      "cluster";
+
+    currentParent =
+      cluster;
+
+
+    /*
+     * Again split into THREE.
+     */
+
+    const subClusters =
+      createThreeBubbles(
+        cluster.rows,
+        [
+          cluster.latitude,
+          cluster.longitude
+        ]
+      );
+
+
+    /*
+     * AGAIN color is calculated
+     * independently for this layer.
+     */
+
+    drawBubbles(
+      subClusters,
+      (
+        currentParent.name ||
+        "Cluster"
+      ) +
+      " → Sub Clusters",
+      openSubCluster
+    );
+
+
+    fitItems(
+      subClusters
+    );
+
+  }
+
+
+  /* ============================================================
+     OPEN SUB CLUSTER
+     ============================================================ */
+
+  function openSubCluster(
+    subCluster
+  ) {
+
+    navigationStack.push({
+
+      level:
+        currentLevel,
+
+      parent:
+        currentParent
+
+    });
+
+
+    currentLevel =
+      "subcluster";
+
+    currentParent =
+      subCluster;
+
+
+    /*
+     * Show districts contained
+     * inside this bubble.
+     */
+
+    const districtGroups =
+      groupBy(
+        subCluster.rows,
+        row =>
+          lower(
+            row.district
+          ) ||
+          (
+            "unknown_" +
+            Math.random()
+          )
+      );
+
+
+    const districts = [];
+
+
+    districtGroups.forEach(
+      rows => {
+
+        let count = 0;
+
+        let latSum = 0;
+
+        let lonSum = 0;
+
+        let coordCount = 0;
+
+
+        rows.forEach(
+          row => {
+
+            count +=
+              Number(row.count) || 0;
+
+
+            if (
+              Number.isFinite(
+                row.latitude
+              ) &&
+              Number.isFinite(
+                row.longitude
+              )
+            ) {
+
+              latSum +=
+                row.latitude;
+
+              lonSum +=
+                row.longitude;
+
+              coordCount++;
 
             }
+
+          }
         );
 
 
-        return div;
-
-    };
-
-
-backControl.addTo(map);
+        const first =
+          rows[0];
 
 
-/* =========================================================
-   BACK HANDLER
-   ========================================================= */
+        districts.push({
 
-function handleBack() {
+          name:
+            first.district ||
+            "Unknown District",
+
+          municipality:
+            first.municipality,
+
+          district:
+            first.district ||
+            "Unknown District",
+
+          count,
+
+          latitude:
+            coordCount
+              ? latSum /
+                coordCount
+              : subCluster.latitude,
+
+          longitude:
+            coordCount
+              ? lonSum /
+                coordCount
+              : subCluster.longitude,
+
+          rows
+
+        });
+
+      }
+    );
+
+
+    /*
+     * CRITICAL:
+     *
+     * District colors are calculated separately.
+     *
+     * They DO NOT inherit the sub-cluster color.
+     */
+
+    const coloredDistricts =
+      applyRisk(
+        districts
+      );
+
+
+    drawBubbles(
+      coloredDistricts,
+      "Districts",
+      openDistrict
+    );
+
+
+    fitItems(
+      coloredDistricts
+    );
+
+  }
+
+
+  /* ============================================================
+     OPEN DISTRICT
+     ============================================================ */
+
+  function openDistrict(
+    district
+  ) {
+
+    navigationStack.push({
+
+      level:
+        currentLevel,
+
+      parent:
+        currentParent
+
+    });
+
+
+    currentLevel =
+      "district";
+
+    currentParent =
+      district;
+
+
+    /*
+     * If the district has enough records,
+     * split them into THREE final bubbles.
+     */
 
     if (
-        drillLevel === 3
+      district.rows &&
+      district.rows.length > 1
     ) {
 
-        if (
-            selectedCluster
-        ) {
-
-            showSecondLevel(
-
-                selectedCluster,
-
-                selectedMunicipality
-
-            );
-
-        }
-
-        return;
-
-    }
-
-
-    if (
-        drillLevel === 2
-    ) {
-
-        if (
-            selectedMunicipality
-        ) {
-
-            showMunicipality(
-                selectedMunicipality
-            );
-
-        }
-
-        return;
-
-    }
-
-
-    showMunicipalityOverview();
-
-}
-
-
-/* =========================================================
-   UPDATE BACK BUTTON
-   ========================================================= */
-
-function updateBackButton() {
-
-    const button =
-        document.querySelector(
-            ".map-back-button"
+      const bubbles =
+        createThreeBubbles(
+          district.rows,
+          [
+            district.latitude,
+            district.longitude
+          ]
         );
 
 
-    if (!button) {
-
-        return;
-
-    }
-
-
-    if (
-        drillLevel === 0
-    ) {
-
-        button.style.display =
-            "none";
-
-        return;
-
-    }
+      drawBubbles(
+        bubbles,
+        district.name +
+        " → Clusters",
+        openFinalCluster
+      );
 
 
-    button.style.display =
-        "block";
-
-
-    if (
-        drillLevel === 1
-    ) {
-
-        button.innerHTML =
-            "← Municipalities";
-
-    }
-
-    else if (
-        drillLevel === 2
-    ) {
-
-        button.innerHTML =
-            "← Groups";
+      fitItems(
+        bubbles
+      );
 
     }
 
     else {
 
-        button.innerHTML =
-            "← Sub-groups";
+      /*
+       * Single record.
+       *
+       * Still assign a risk independently.
+       */
+
+      const single =
+        applyRisk([
+          {
+
+            name:
+              district.name,
+
+            count:
+              district.count,
+
+            latitude:
+              district.latitude,
+
+            longitude:
+              district.longitude,
+
+            rows:
+              district.rows
+
+          }
+        ]);
+
+
+      drawBubbles(
+        single,
+        district.name,
+        function () {}
+      );
+
+
+      fitItems(
+        single
+      );
 
     }
 
-}
+  }
 
 
-/* =========================================================
-   SHOW MUNICIPALITY OVERVIEW
-   ========================================================= */
+  /* ============================================================
+     FINAL CLUSTER
+     ============================================================ */
 
-function showMunicipalityOverview() {
+  function openFinalCluster(
+    cluster
+  ) {
 
-    drillLevel = 0;
+    navigationStack.push({
 
-    selectedMunicipality =
-        null;
+      level:
+        currentLevel,
 
-    selectedCluster =
-        null;
+      parent:
+        currentParent
 
-    selectedSubCluster =
-        null;
-
-
-    currentClusters = [];
+    });
 
 
-    createMunicipalityMarkers();
+    currentLevel =
+      "final";
 
 
-    const boundaries = [
-
-        municipalityBoundaryLayers.Dammam,
-
-        municipalityBoundaryLayers.Dhahran,
-
-        municipalityBoundaryLayers.Khobar
-
-    ].filter(Boolean);
+    currentParent =
+      cluster;
 
 
-    if (boundaries.length) {
+    /*
+     * Split AGAIN if possible.
+     */
 
-        const group =
-            L.featureGroup(
-                boundaries
-            );
+    if (
+      cluster.rows &&
+      cluster.rows.length > 1
+    ) {
 
-
-        if (
-            group.getBounds().isValid()
-        ) {
-
-            map.fitBounds(
-
-                group.getBounds(),
-
-                {
-
-                    padding:
-                        [30, 30]
-
-                }
-
-            );
-
-        }
-
-    }
-
-
-    updateMapInfo(
-
-        "🟢 Low &nbsp;&nbsp; 🟡 Medium &nbsp;&nbsp; 🔴 High"
-
-    );
-
-
-    updateBackButton();
-
-}
-
-
-/* =========================================================
-   MUNICIPALITY BOUNDARY STYLE
-   =========================================================
-
-   IMPORTANT:
-   No municipality-specific colors.
-
-   ========================================================= */
-
-function boundaryStyle() {
-
-    return {
-
-        color:
-            "#4b5563",
-
-        weight:
-            2,
-
-        opacity:
-            0.85,
-
-        fillColor:
-            "#9ca3af",
-
-        fillOpacity:
-            0.025
-
-    };
-
-}
-
-
-/* =========================================================
-   DISTRICT STYLE
-   ========================================================= */
-
-function districtStyle(
-    city,
-    districtName
-) {
-
-    const count =
-        getDistrictCount(
-            districtName
+      const finalBubbles =
+        createThreeBubbles(
+          cluster.rows,
+          [
+            cluster.latitude,
+            cluster.longitude
+          ]
         );
 
 
-    const risk =
-        getRiskLevel(count);
+      /*
+       * createThreeBubbles()
+       * recalculates Red/Yellow/Green.
+       */
+
+      drawBubbles(
+        finalBubbles,
+        cluster.name +
+        " → Final Level",
+        finalBubbleClick
+      );
 
 
-    return {
+      fitItems(
+        finalBubbles
+      );
 
-        color:
-            "#374151",
+    }
 
-        weight:
-            1.2,
-
-        opacity:
-            0.75,
-
-        fillColor:
-            risk.color,
-
-        fillOpacity:
-            count > 0
-                ? 0.22
-                : 0.03
-
-    };
-
-}
+  }
 
 
-/* =========================================================
-   MAKE DISTRICT NODES
-   ========================================================= */
+  /* ============================================================
+     FINAL BUBBLE
+     ============================================================ */
 
-function makeDistrictNodes(
-    data,
-    city
-) {
+  function finalBubbleClick(
+    bubble
+  ) {
+
+    /*
+     * Show districts one final time.
+     */
+
+    const groups =
+      groupBy(
+        bubble.rows,
+        row =>
+          lower(
+            row.district
+          ) ||
+          "unknown"
+      );
+
+
+    const districts = [];
+
+
+    groups.forEach(
+      rows => {
+
+        let count = 0;
+
+        let lat = 0;
+
+        let lon = 0;
+
+        let n = 0;
+
+
+        rows.forEach(
+          row => {
+
+            count +=
+              Number(row.count) || 0;
+
+
+            if (
+              Number.isFinite(
+                row.latitude
+              ) &&
+              Number.isFinite(
+                row.longitude
+              )
+            ) {
+
+              lat +=
+                row.latitude;
+
+              lon +=
+                row.longitude;
+
+              n++;
+
+            }
+
+          }
+        );
+
+
+        const first =
+          rows[0];
+
+
+        districts.push({
+
+          name:
+            first.district ||
+            "Unknown District",
+
+          count,
+
+          latitude:
+            n
+              ? lat / n
+              : bubble.latitude,
+
+          longitude:
+            n
+              ? lon / n
+              : bubble.longitude,
+
+          rows
+
+        });
+
+      }
+    );
+
+
+    /*
+     * FINAL independent color calculation.
+     */
+
+    const colored =
+      applyRisk(
+        districts
+      );
+
+
+    drawBubbles(
+      colored,
+      "Districts",
+      function () {}
+    );
+
+
+    fitItems(
+      colored
+    );
+
+  }
+
+
+  /* ============================================================
+     FIT MAP
+     ============================================================ */
+
+  function fitItems(
+    items
+  ) {
+
+    const valid =
+      items.filter(
+        item =>
+          Number.isFinite(
+            item.latitude
+          ) &&
+          Number.isFinite(
+            item.longitude
+          )
+      );
+
 
     if (
-        !data ||
-        !Array.isArray(
-            data.features
+      !valid.length
+    ) {
+
+      return;
+
+    }
+
+
+    const bounds =
+      L.latLngBounds(
+        valid.map(
+          item => [
+            item.latitude,
+            item.longitude
+          ]
         )
-    ) {
-
-        return [];
-
-    }
-
-
-    return data.features
-        .map(feature => {
-
-            const districtName =
-                String(
-
-                    feature.properties?.REMARKS ||
-
-                    feature.properties?.NameEn ||
-
-                    feature.properties?.NAME ||
-
-                    feature.properties?.name ||
-
-                    ""
-
-                ).trim();
-
-
-            if (!districtName) {
-
-                return null;
-
-            }
-
-
-            districtToCity[
-                districtName
-            ] = city;
-
-
-            districtNameLookup[
-                districtLookupKey(
-                    districtName
-                )
-            ] = {
-
-                name:
-                    districtName,
-
-                city:
-                    city,
-
-                count:
-                    getDistrictCount(
-                        districtName
-                    )
-
-            };
-
-
-            const layer =
-                L.geoJSON(
-
-                    feature,
-
-                    {
-
-                        style:
-                            districtStyle(
-                                city,
-                                districtName
-                            )
-
-                    }
-
-                );
-
-
-            layer.bindTooltip(
-
-                districtTooltipHtml(
-
-                    districtName,
-
-                    city,
-
-                    getDistrictCount(
-                        districtName
-                    )
-
-                ),
-
-                {
-
-                    sticky:
-                        true,
-
-                    direction:
-                        "top",
-
-                    opacity:
-                        0.95,
-
-                    className:
-                        "custom-tooltip"
-
-                }
-
-            );
-
-
-            layer.on({
-
-                mouseover:
-                    function(e) {
-
-                        e.target.setStyle({
-
-                            weight:
-                                2.5,
-
-                            fillColor:
-                                getRiskLevel(
-
-                                    getDistrictCount(
-                                        districtName
-                                    )
-
-                                ).color,
-
-                            fillOpacity:
-                                0.40
-
-                        });
-
-                    },
-
-
-                mouseout:
-                    function() {
-
-                        layer.setStyle(
-
-                            districtStyle(
-                                city,
-                                districtName
-                            )
-
-                        );
-
-                    },
-
-
-                click:
-                    function() {
-
-                        const d =
-                            districtCounts[
-                                districtName
-                            ];
-
-
-                        window.parent.postMessage(
-
-                            {
-
-                                type:
-                                    "mapClick",
-
-                                state:
-                                    districtName,
-
-                                municipality:
-                                    city,
-
-                                lat:
-                                    d
-                                        ? d.lat
-                                        : null,
-
-                                long:
-                                    d
-                                        ? d.long
-                                        : null
-
-                            },
-
-                            "*"
-
-                        );
-
-                    }
-
-            });
-
-
-            districtLayers[
-                districtName
-            ] = layer;
-
-
-            return {
-
-                label:
-                    districtName,
-
-                layer:
-                    layer
-
-            };
-
-        })
-
-        .filter(Boolean);
-
-}
-
-
-/* =========================================================
-   LOAD GEOJSON
-   ========================================================= */
-
-Promise.all([
-
-    fetch(
-        "./municipality.geojson"
-    ).then(
-        r => r.json()
-    ),
-
-
-    fetch(
-        "./dammam.geojson"
-    ).then(
-        r => r.json()
-    ),
-
-
-    fetch(
-        "./dhahran.geojson"
-    ).then(
-        r => r.json()
-    ),
-
-
-    fetch(
-        "./khobar.geojson"
-    ).then(
-        r => r.json()
-    )
-
-])
-
-.then(
-
-    ([
-
-        municipalityData,
-
-        dammamData,
-
-        dhahranData,
-
-        khobarData
-
-    ]) => {
-
-
-        /* =================================================
-           MUNICIPALITY BOUNDARIES
-           ================================================= */
-
-        if (
-
-            municipalityData &&
-
-            Array.isArray(
-                municipalityData.features
-            )
-
-        ) {
-
-            municipalityData.features.forEach(
-                feature => {
-
-
-                    const name =
-                        String(
-
-                            feature.properties?.REMARKS ||
-
-                            feature.properties?.NameEn ||
-
-                            feature.properties?.NAME ||
-
-                            feature.properties?.name ||
-
-                            ""
-
-                        ).trim();
-
-
-                    let city = null;
-
-
-                    /* Arabic */
-
-                    if (
-                        name === "الدمام"
-                    ) {
-
-                        city =
-                            "Dammam";
-
-                    }
-
-                    else if (
-                        name === "الظهران"
-                    ) {
-
-                        city =
-                            "Dhahran";
-
-                    }
-
-                    else if (
-                        name === "الخبر"
-                    ) {
-
-                        city =
-                            "Khobar";
-
-                    }
-
-
-                    /* English */
-
-                    else if (
-                        normalizeName(name) ===
-                        "dammam"
-                    ) {
-
-                        city =
-                            "Dammam";
-
-                    }
-
-                    else if (
-                        normalizeName(name) ===
-                        "dhahran"
-                    ) {
-
-                        city =
-                            "Dhahran";
-
-                    }
-
-                    else if (
-                        normalizeName(name) ===
-                        "khobar"
-                    ) {
-
-                        city =
-                            "Khobar";
-
-                    }
-
-
-                    if (!city) {
-
-                        return;
-
-                    }
-
-
-                    if (
-                        !municipalityBoundaryFeatures[city]
-                    ) {
-
-                        municipalityBoundaryFeatures[city] =
-                            [];
-
-                    }
-
-
-                    municipalityBoundaryFeatures[city]
-                        .push(feature);
-
-
-                    const boundary =
-                        L.geoJSON(
-
-                            feature,
-
-                            {
-
-                                style:
-                                    boundaryStyle()
-
-                            }
-
-                        );
-
-
-                    boundary.bindTooltip(
-
-                        municipalityTooltipHtml(
-                            city
-                        ),
-
-                        {
-
-                            sticky:
-                                true,
-
-                            direction:
-                                "top",
-
-                            opacity:
-                                0.95,
-
-                            className:
-                                "custom-tooltip"
-
-                        }
-
-                    );
-
-
-                    boundary.on(
-
-                        "mouseover",
-
-                        function() {
-
-                            boundary.setStyle({
-
-                                weight:
-                                    3,
-
-                                fillOpacity:
-                                    0.06
-
-                            });
-
-                        }
-
-                    );
-
-
-                    boundary.on(
-
-                        "mouseout",
-
-                        function() {
-
-                            boundary.setStyle(
-                                boundaryStyle()
-                            );
-
-                        }
-
-                    );
-
-
-                    municipalityBoundaryLayers[
-                        city
-                    ] =
-                        boundary;
-
-
-                    const center =
-                        boundary
-                            .getBounds()
-                            .getCenter();
-
-
-                    municipalityCenters[
-                        city
-                    ] = {
-
-                        lat:
-                            center.lat,
-
-                        long:
-                            center.lng
-
-                    };
-
-
-                    boundary.addTo(map);
-
-                }
-
-            );
-
-        }
-
-
-        /* =================================================
-           DISTRICT LAYERS
-           ================================================= */
-
-        const dammamDistricts =
-            makeDistrictNodes(
-
-                dammamData,
-
-                "Dammam"
-
-            );
-
-
-        const dhahranDistricts =
-            makeDistrictNodes(
-
-                dhahranData,
-
-                "Dhahran"
-
-            );
-
-
-        const khobarDistricts =
-            makeDistrictNodes(
-
-                khobarData,
-
-                "Khobar"
-
-            );
-
-
-        /* =================================================
-           LAYER TREE
-           ================================================= */
-
-        const overlaysTree = {
-
-            label:
-                "Map Layers",
-
-            selectAllCheckbox:
-                false,
-
-            children: [
-
-                {
-
-                    label:
-                        "Dammam",
-
-                    selectAllCheckbox:
-                        true,
-
-                    children: [
-
-                        {
-
-                            label:
-                                "Boundary",
-
-                            layer:
-                                municipalityBoundaryLayers.Dammam
-
-                        },
-
-                        {
-
-                            label:
-                                "Districts",
-
-                            selectAllCheckbox:
-                                true,
-
-                            children:
-                                dammamDistricts
-
-                        }
-
-                    ]
-
-                },
-
-
-                {
-
-                    label:
-                        "Dhahran",
-
-                    selectAllCheckbox:
-                        true,
-
-                    children: [
-
-                        {
-
-                            label:
-                                "Boundary",
-
-                            layer:
-                                municipalityBoundaryLayers.Dhahran
-
-                        },
-
-                        {
-
-                            label:
-                                "Districts",
-
-                            selectAllCheckbox:
-                                true,
-
-                            children:
-                                dhahranDistricts
-
-                        }
-
-                    ]
-
-                },
-
-
-                {
-
-                    label:
-                        "Khobar",
-
-                    selectAllCheckbox:
-                        true,
-
-                    children: [
-
-                        {
-
-                            label:
-                                "Boundary",
-
-                            layer:
-                                municipalityBoundaryLayers.Khobar
-
-                        },
-
-                        {
-
-                            label:
-                                "Districts",
-
-                            selectAllCheckbox:
-                                true,
-
-                            children:
-                                khobarDistricts
-
-                        }
-
-                    ]
-
-                }
-
-            ]
-
-        };
-
-
-        L.control.layers.tree(
-
-            {
-
-                "OpenStreetMap":
-                    osm
-
-            },
-
-            overlaysTree,
-
-            {
-
-                collapsed:
-                    false,
-
-                namedToggle:
-                    true,
-
-                selectorBack:
-                    false,
-
-                closedSymbol:
-                    "▶",
-
-                openedSymbol:
-                    "▼"
-
-            }
-
-        ).addTo(map);
-
-
-        /* =================================================
-           MAP EXTENT
-           ================================================= */
-
-        const boundaries = [
-
-            municipalityBoundaryLayers.Dammam,
-
-            municipalityBoundaryLayers.Dhahran,
-
-            municipalityBoundaryLayers.Khobar
-
-        ].filter(Boolean);
-
-
-        if (
-            boundaries.length
-        ) {
-
-            const group =
-                L.featureGroup(
-                    boundaries
-                );
-
-
-            if (
-                group.getBounds().isValid()
-            ) {
-
-                map.fitBounds(
-
-                    group.getBounds(),
-
-                    {
-
-                        padding:
-                            [30, 30]
-
-                    }
-
-                );
-
-            }
-
-        }
-
-
-        /* =================================================
-           LEGEND
-           ================================================= */
-
-        const legend =
-            L.control({
-
-                position:
-                    "bottomleft"
-
-            });
-
-
-        legend.onAdd =
-            function() {
-
-                const div =
-                    L.DomUtil.create(
-
-                        "div",
-
-                        "risk-legend"
-
-                    );
-
-
-                div.innerHTML = `
-
-                    <div
-                        class="risk-legend-title"
-                    >
-                        Incident Risk
-                    </div>
-
-
-                    <div class="legend-row">
-
-                        <span
-                            class="legend-color
-                                   legend-green">
-                        </span>
-
-                        <span>
-                            Low
-                        </span>
-
-                    </div>
-
-
-                    <div class="legend-row">
-
-                        <span
-                            class="legend-color
-                                   legend-yellow">
-                        </span>
-
-                        <span>
-                            Medium
-                        </span>
-
-                    </div>
-
-
-                    <div class="legend-row">
-
-                        <span
-                            class="legend-color
-                                   legend-red">
-                        </span>
-
-                        <span>
-                            High
-                        </span>
-
-                    </div>
-
-                `;
-
-
-                return div;
-
-            };
-
-
-        legend.addTo(map);
-
-
-        /* =================================================
-           MAP READY
-           ================================================= */
-
-        mapReady =
-            true;
-
-
-        if (
-            pendingIncidentData
-        ) {
-
-            applyIncidentData(
-                pendingIncidentData
-            );
-
-
-            pendingIncidentData =
-                null;
-
-        }
-
-        else {
-
-            calculateRiskStats();
-
-            showMunicipalityOverview();
-
-        }
-
-
-        /* =================================================
-           INFORM GRAFANA
-           ================================================= */
-
-        window.parent.postMessage(
-
-            {
-
-                type:
-                    "iframeReady"
-
-            },
-
-            "*"
-
-        );
-
-    }
-
-)
-
-.catch(
-
-    err => {
-
-        console.error(
-
-            "Error loading GeoJSON:",
-
-            err
-
-        );
-
-    }
-
-);
-
-
-/* =========================================================
-   APPLY GRAFANA DATA
-   ========================================================= */
-
-function applyIncidentData(
-    rows
-) {
-
-
-    /* =====================================================
-       RESET
-       ===================================================== */
-
-    Object.keys(
-        districtCounts
-    ).forEach(key => {
-
-        delete districtCounts[key];
-
-    });
-
-
-    Object.keys(
-        districtNameLookup
-    ).forEach(key => {
-
-        delete districtNameLookup[key];
-
-    });
-
-
-    CITIES.forEach(city => {
-
-        municipalityTotals[city] =
-            0;
-
-        municipalityIncidentRows[city] =
-            [];
-
-    });
-
-
-    /* =====================================================
-       PROCESS ROWS
-       ===================================================== */
-
-    (rows || []).forEach(
-        row => {
-
-            const name =
-                String(
-                    row.state || ""
-                ).trim();
-
-
-            const count =
-                Number(
-                    row.count || 0
-                );
-
-
-            let lat =
-                Number(row.lat);
-
-
-            let lng =
-                Number(row.long);
-
-
-            if (
-                !name ||
-                !Number.isFinite(count)
-            ) {
-
-                return;
-
-            }
-
-
-            /* ------------------------------------------------
-               Normalize invalid coordinates
-               ------------------------------------------------ */
-
-            if (
-                !Number.isFinite(lat)
-            ) {
-
-                lat = null;
-
-            }
-
-
-            if (
-                !Number.isFinite(lng)
-            ) {
-
-                lng = null;
-
-            }
-
-
-            /* ------------------------------------------------
-               Municipality resolution
-               ------------------------------------------------ */
-
-            const resolution =
-                resolveMunicipality(
-
-                    name,
-
-                    lat,
-
-                    lng
-
-                );
-
-
-            if (
-                !resolution.city
-            ) {
-
-                console.warn(
-
-                    "Could not resolve municipality:",
-
-                    {
-
-                        name,
-
-                        count,
-
-                        lat,
-
-                        lng
-
-                    }
-
-                );
-
-                return;
-
-            }
-
-
-            const city =
-                resolution.city;
-
-
-            /* ------------------------------------------------
-               Store municipality total
-               ------------------------------------------------ */
-
-            municipalityTotals[city] +=
-                count;
-
-
-            /* ------------------------------------------------
-               If district exists in GeoJSON,
-               store its count.
-               ------------------------------------------------ */
-
-            const exactDistrict =
-                districtToCity[name];
-
-
-            if (
-                exactDistrict
-            ) {
-
-                districtCounts[
-                    exactDistrict
-                ] = {
-
-                    count,
-
-                    lat,
-
-                    long:
-                        lng
-
-                };
-
-            }
-
-
-            /* ------------------------------------------------
-               Store normalized lookup
-               ------------------------------------------------ */
-
-            districtNameLookup[
-                districtLookupKey(name)
-            ] = {
-
-                name,
-
-                city,
-
-                count
-
-            };
-
-
-            /* ------------------------------------------------
-               IMPORTANT:
-               Every row stays inside municipality.
-
-               Unknown district names are NOT discarded.
-               ------------------------------------------------ */
-
-            municipalityIncidentRows[city]
-                .push({
-
-                    name,
-
-                    count,
-
-                    lat,
-
-                    lng,
-
-                    city,
-
-                    method:
-                        resolution.method
-
-                });
-
-        }
-
-    );
-
-
-    /* =====================================================
-       CREATE FALLBACK POSITIONS
-       =====================================================
-
-       For rows without coordinates, put them around
-       the municipality center.
-
-       ===================================================== */
-
-    CITIES.forEach(city => {
-
-        const rowsForCity =
-            municipalityIncidentRows[city];
-
-
-        rowsForCity.forEach(
-            (row, index) => {
-
-                if (
-                    !Number.isFinite(row.lat) ||
-                    !Number.isFinite(row.lng)
-                ) {
-
-                    const fallback =
-                        fallbackCoordinate(
-
-                            city,
-
-                            index,
-
-                            rowsForCity.length
-
-                        );
-
-
-                    if (fallback) {
-
-                        row.lat =
-                            fallback.lat;
-
-                        row.lng =
-                            fallback.lng;
-
-                    }
-
-                }
-
-            }
-
-        );
-
-    });
-
-
-    /* =====================================================
-       RISK
-       ===================================================== */
-
-    calculateRiskStats();
-
-
-    /* =====================================================
-       UPDATE DISTRICT POLYGONS
-       ===================================================== */
-
-    Object.keys(
-        districtLayers
-    ).forEach(name => {
-
-        const city =
-            districtToCity[name];
-
-
-        const layer =
-            districtLayers[name];
-
-
-        if (!layer) {
-
-            return;
-
-        }
-
-
-        layer.setStyle(
-
-            districtStyle(
-                city,
-                name
-            )
-
-        );
-
-
-        layer.setTooltipContent(
-
-            districtTooltipHtml(
-
-                name,
-
-                city,
-
-                getDistrictCount(
-                    name
-                )
-
-            )
-
-        );
-
-    });
-
-
-    /* =====================================================
-       RESET VIEW
-       ===================================================== */
-
-    drillLevel =
-        0;
-
-    selectedMunicipality =
-        null;
-
-    selectedCluster =
-        null;
-
-    selectedSubCluster =
-        null;
-
-
-    currentClusters = [];
-
-
-    showMunicipalityOverview();
-
-
-    scheduleRefresh();
-
-}
-
-
-/* =========================================================
-   REFRESH
-   ========================================================= */
-
-function scheduleRefresh() {
-
-    if (
-        refreshTimer
-    ) {
-
-        clearTimeout(
-            refreshTimer
-        );
-
-    }
-
-
-    refreshTimer =
-        setTimeout(
-
-            () => {
-
-                refreshTimer =
-                    null;
-
-                refreshMap();
-
-            },
-
-            100
-
-        );
-
-}
-
-
-/* =========================================================
-   REFRESH MAP
-   ========================================================= */
-
-function refreshMap() {
-
-    calculateRiskStats();
+      );
 
 
     if (
-        drillLevel === 0
+      valid.length === 1
     ) {
 
-        showMunicipalityOverview();
+      map.setView(
+        [
+          valid[0].latitude,
+          valid[0].longitude
+        ],
+        Math.min(
+          CONFIG.MAX_ZOOM,
+          map.getZoom() + 2
+        )
+      );
 
     }
 
-}
+    else {
 
+      map.fitBounds(
+        bounds,
+        {
+          padding: [
+            70,
+            70
+          ],
 
-/* =========================================================
-   RECEIVE DATA FROM GRAFANA
-   ========================================================= */
-
-window.addEventListener(
-
-    "message",
-
-    event => {
-
-
-        if (
-            event.data?.type !==
-            "incidentData"
-        ) {
-
-            return;
-
+          maxZoom:
+            CONFIG.MAX_ZOOM
         }
-
-
-        const rows =
-            event.data.data || [];
-
-
-        console.log(
-
-            "Received incident data:",
-
-            rows
-
-        );
-
-
-        if (!mapReady) {
-
-            pendingIncidentData =
-                rows;
-
-            return;
-
-        }
-
-
-        applyIncidentData(
-            rows
-        );
+      );
 
     }
 
-);
+  }
+
+
+  /* ============================================================
+     BACK BUTTON
+     ============================================================ */
+
+  backButton.addEventListener(
+    "click",
+    function () {
+
+      if (
+        !navigationStack.length
+      ) {
+
+        showMunicipalities();
+
+        return;
+
+      }
+
+
+      /*
+       * Simplest and safest navigation:
+       *
+       * Return to municipality layer
+       * when going back.
+       */
+
+      navigationStack =
+        [];
+
+
+      showMunicipalities();
+
+    }
+  );
+
+
+  /* ============================================================
+     INITIALIZE
+     ============================================================ */
+
+  function initialize() {
+
+    readGrafanaData();
+
+
+    if (
+      !rawData.length
+    ) {
+
+      header.textContent =
+        "No data";
+
+      return;
+
+    }
+
+
+    showMunicipalities();
+
+  }
+
+
+  /* ============================================================
+     GRAFANA HTML GRAPHICS
+     
+     Re-render safely.
+     ============================================================ */
+
+  initialize();
+
+
+})();
 
 </script>
 
 </body>
-
 </html>
-```
