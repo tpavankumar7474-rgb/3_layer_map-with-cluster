@@ -2,392 +2,423 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Municipality Incident Heat Map</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
-html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; font-family:Arial,Helvetica,sans-serif; }
-#map { width:100%; height:100vh; }
-.map-title{
- position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:9999;
- background:rgba(255,255,255,.96); border:1px solid #333; border-radius:9px;
- padding:8px 18px; font-size:16px; font-weight:800; color:#111; box-shadow:0 2px 8px rgba(0,0,0,.25);
- pointer-events:none; white-space:nowrap;
-}
-.map-info{
- position:absolute; top:58px; left:50%; transform:translateX(-50%); z-index:9999;
- background:rgba(255,255,255,.92); border-radius:8px; padding:6px 12px;
- font-size:12px; color:#222; box-shadow:0 1px 6px rgba(0,0,0,.18); pointer-events:none; white-space:nowrap;
-}
-.back-btn{
- background:#fff; border:1px solid #333; border-radius:8px; padding:8px 12px; font-size:13px; font-weight:800;
- cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.25); display:none;
-}
+html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;font-family:Arial,Helvetica,sans-serif}
+#map{width:100%;height:100vh;background:#e9edf1}
+.map-title{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:5000;background:rgba(255,255,255,.95);border:1px solid #555;border-radius:8px;padding:7px 15px;font-size:15px;font-weight:800;color:#111;box-shadow:0 2px 8px rgba(0,0,0,.25);pointer-events:none;white-space:nowrap}
+.map-info{position:absolute;top:51px;left:50%;transform:translateX(-50%);z-index:4999;background:rgba(255,255,255,.92);border-radius:7px;padding:5px 10px;font-size:11px;color:#222;box-shadow:0 1px 6px rgba(0,0,0,.18);pointer-events:none;white-space:nowrap}
+.back-btn{background:#fff;border:1px solid #444;border-radius:7px;padding:7px 12px;font-size:13px;font-weight:800;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25)}
 .back-btn:hover{background:#f3f4f6}
-.legend{
- background:rgba(255,255,255,.95); border:1px solid #333; border-radius:9px; padding:10px 12px;
- box-shadow:0 2px 8px rgba(0,0,0,.26); color:#111; font-size:12px; min-width:155px;
-}
-.legend-title{font-weight:800;font-size:13px;text-align:center;margin-bottom:7px}
-.legend-row{display:flex;align-items:center;gap:7px;margin:4px 0}
-.swatch{width:18px;height:18px;border-radius:4px;display:inline-block;border:1px solid rgba(0,0,0,.2)}
-.sw-green{background:#16a34a}.sw-yellow{background:#facc15}.sw-red{background:#dc2626}
-.area-label{
- background:rgba(255,255,255,.88); border:1px solid rgba(0,0,0,.55); border-radius:999px;
- padding:3px 7px; font-size:11px; font-weight:800; color:#111; box-shadow:0 1px 4px rgba(0,0,0,.18);
-}
-.leaflet-tooltip.custom-tip{background:rgba(255,255,255,.97);border:1px solid #333;color:#111;border-radius:7px;box-shadow:0 2px 8px rgba(0,0,0,.25);font-size:12px;line-height:1.5}
-@media(max-width:600px){.map-title{font-size:13px;padding:7px 12px}.map-info{font-size:10px}.legend{min-width:125px;font-size:11px}}
+.legend{background:rgba(255,255,255,.96);border:1px solid #444;border-radius:8px;padding:9px 11px;box-shadow:0 2px 8px rgba(0,0,0,.25);font-size:12px;color:#111;min-width:145px}
+.legend-title{font-weight:800;font-size:13px;text-align:center;margin-bottom:6px}
+.legend-row{display:flex;align-items:center;gap:7px;margin:4px 0}.legend-dot{width:16px;height:16px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.2)}
+.lg-green{background:#32a852}.lg-yellow{background:#f6d84a}.lg-red{background:#e53935}
+.area-tip{background:rgba(255,255,255,.96);border:1px solid #333;color:#111;border-radius:6px;font-size:12px;font-weight:700;padding:4px 7px;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.city-boundary{fill-opacity:0 !important;fill:none !important}
+@media(max-width:600px){.map-title{font-size:12px;padding:6px 10px}.map-info{font-size:9px}.legend{min-width:120px;font-size:11px}}
 </style>
 </head>
 <body>
 <div id="map"></div>
 <div class="map-title">Municipality Incident Heat Map</div>
-<div id="mapInfo" class="map-info">🟢 Low &nbsp; 🟡 Medium &nbsp; 🔴 High &nbsp; | &nbsp; Click a municipality to drill down</div>
+<div id="mapInfo" class="map-info">Loading map…</div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.2.0/turf.min.js"></script>
 <script>
 (function(){
 'use strict';
 
+/* =========================================================
+   CONFIGURATION
+   ========================================================= */
 const CITIES=['Dammam','Dhahran','Khobar'];
-const CITY_AR={'Dammam':'الدمام','Dhahran':'الظهران','Khobar':'الخبر'};
-const CITY_MATCH={dammam:'Dammam',dhahran:'Dhahran',khobar:'Khobar','الدمام':'Dammam','الظهران':'Dhahran','الخبر':'Khobar'};
-const AREA_COLORS=['#dc2626','#facc15','#16a34a','#3b82f6','#8b5cf6'];
-const districtLayers={};
-const districtMeta={};
+const CITY_AR={Dammam:'الدمام',Dhahran:'الظهران',Khobar:'الخبر'};
+const CITY_FILES={
+  Dammam:'./dammam.geojson',
+  Dhahran:'./dhahran.geojson',
+  Khobar:'./khobar.geojson'
+};
+const MUNICIPALITY_FILE='./municipality.geojson';
+const AREA_COLORS=['#d7191c','#fdae61','#1a9641','#377eb8','#7b2cbf'];
+const NO_DATA='#cbd5e1';
+const HEAT_RES=320;
+const HEAT_OPACITY=.78;
+const HEAT_RADIUS_FACTOR=.075;
+
+/* =========================================================
+   MAP / STATE
+   ========================================================= */
+const map=L.map('map',{zoomControl:true,maxZoom:19});
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap contributors',maxZoom:19}).addTo(map);
+
+const state={level:0,city:null,area:null,seeds:[],areasGeo:null};
 const cityFeatures={Dammam:[],Dhahran:[],Khobar:[]};
-const cityBoundaries={};
+const cityBoundaryLayers={};
 const cityCenters={};
 const cityRows={Dammam:[],Dhahran:[],Khobar:[]};
+const districtMeta={};
+const districtByKey={};
 const municipalityTotals={Dammam:0,Dhahran:0,Khobar:0};
-const heatLayers={Dammam:null,Dhahran:null,Khobar:null};
-const areaLayers=[];
-const areaLabels=[];
-let state={level:0,city:null,area:null};
-let mapReady=false,pendingRows=null;
+let heatOverlays={};
+let districtVisible=[];
+let areaLayers=[];
+let areaLabels=[];
+let pendingRows=null;
+let mapReady=false;
 
-const map=L.map('map',{zoomControl:true,maxZoom:19});
-const osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap contributors',maxZoom:19}).addTo(map);
-
-function norm(v){return String(v??'').trim().replace(/\s+/g,' ').toLowerCase().replace(/[‐-‒–—―]/g,'-');}
+function setInfo(html){const el=document.getElementById('mapInfo');if(el)el.innerHTML=html;}
+function n(v){const x=Number(v);return Number.isFinite(x)?x:0;}
+function norm(v){return String(v??'').trim().replace(/\s+/g,' ').toLowerCase();}
 function normAr(v){return norm(v).replace(/[\u064B-\u065F\u0670]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه');}
-function cityFromName(v){const n=normAr(v); return CITY_MATCH[n] || null;}
-function num(v){const x=Number(v); return Number.isFinite(x)?x:0;}
-function rowLat(r){return Number.isFinite(Number(r.lat))?Number(r.lat):Number.isFinite(Number(r.latitude))?Number(r.latitude):null;}
-function rowLng(r){return Number.isFinite(Number(r.long))?Number(r.long):Number.isFinite(Number(r.lng))?Number(r.lng):Number.isFinite(Number(r.longitude))?Number(r.longitude):null;}
-function rowName(r){return String(r.state??r.name??r.district??r.location??'').trim();}
-function pointDist(a,b){const dx=(a.lng-b.lng)*Math.cos(((a.lat+b.lat)/2)*Math.PI/180); const dy=a.lat-b.lat; return Math.sqrt(dx*dx+dy*dy);}
-function pointInRing(lat,lng,ring){
-  let inside=false; if(!Array.isArray(ring)||ring.length<3)return false;
-  for(let i=0,j=ring.length-1;i<ring.length;j=i++){
-    const xi=Number(ring[i][0]), yi=Number(ring[i][1]), xj=Number(ring[j][0]), yj=Number(ring[j][1]);
-    const cross=((yi>lat)!==(yj>lat))&&(lng < (xj-xi)*(lat-yi)/((yj-yi)||1e-12)+xi);
-    if(cross)inside=!inside;
-  }
-  return inside;
-}
-function pointInPolygon(lat,lng,coords){
-  if(!coords||!coords.length||!pointInRing(lat,lng,coords[0]))return false;
-  for(let i=1;i<coords.length;i++) if(pointInRing(lat,lng,coords[i])) return false;
-  return true;
-}
-function pointInGeometry(lat,lng,g){
-  if(!g||!g.coordinates)return false;
-  if(g.type==='Polygon')return pointInPolygon(lat,lng,g.coordinates);
-  if(g.type==='MultiPolygon')return g.coordinates.some(p=>pointInPolygon(lat,lng,p));
-  return false;
-}
-function geometryRings(g){
-  if(!g)return[];
-  if(g.type==='Polygon')return g.coordinates.map(r=>r);
-  if(g.type==='MultiPolygon')return g.coordinates.flatMap(p=>p);
-  return[];
-}
-function geoBounds(features){
-  let minLat=Infinity,maxLat=-Infinity,minLng=Infinity,maxLng=-Infinity;
-  features.forEach(f=>geometryRings(f.geometry).forEach(r=>r.forEach(p=>{minLng=Math.min(minLng,p[0]);maxLng=Math.max(maxLng,p[0]);minLat=Math.min(minLat,p[1]);maxLat=Math.max(maxLat,p[1]);})));
-  return (Number.isFinite(minLat))?{minLat,maxLat,minLng,maxLng}:null;
-}
-function featureGeometryContains(features,lat,lng){return features.some(f=>pointInGeometry(lat,lng,f.geometry));}
-function centroidOfCoords(coords){let lat=0,lng=0,n=0;coords.forEach(p=>{lng+=Number(p[0]);lat+=Number(p[1]);n++;});return n?{lat:lat/n,lng:lng/n}:null;}
-function featureCenter(feature){
-  const pts=[]; geometryRings(feature.geometry).forEach(r=>r.forEach(p=>pts.push(p)));
-  return pts.length?centroidOfCoords(pts):null;
-}
+function rowName(r){return String(r?.state??r?.name??r?.district??r?.location??'').trim();}
+function rowLat(r){const a=n(r?.lat);const b=n(r?.latitude);return Number.isFinite(Number(r?.lat))?a:Number.isFinite(Number(r?.latitude))?b:null;}
+function rowLng(r){return Number.isFinite(Number(r?.long))?n(r.long):Number.isFinite(Number(r?.lng))?n(r.lng):Number.isFinite(Number(r?.longitude))?n(r.longitude):null;}
+function dist(a,b){if(!a||!b)return Infinity;const dx=(a.lng-b.lng)*Math.cos(((a.lat+b.lat)/2)*Math.PI/180);const dy=a.lat-b.lat;return Math.sqrt(dx*dx+dy*dy);}
+function pointInside(featureOrFeatures,lat,lng){try{const pt=turf.point([lng,lat]);const fs=Array.isArray(featureOrFeatures)?featureOrFeatures: [featureOrFeatures];return fs.some(f=>{if(!f)return false;try{return turf.booleanPointInPolygon(pt,f)}catch(e){return false}})}catch(e){return false}}
+function allFeaturesGeometry(features){if(!features.length)return null;const fc=turf.featureCollection(features);return turf.featureCollection(features).features.length===1?features[0]:turf.featureCollection(features)}
+function featureCenter(f){try{const c=turf.centroid(f).geometry.coordinates;return{lat:c[1],lng:c[0]}}catch(e){return null}}
+function featuresBounds(features){try{return turf.bbox(turf.featureCollection(features))}catch(e){return null}}
 
+/* =========================================================
+   RISK SCALE
+   ========================================================= */
+function quantile(values,p){if(!values.length)return 0;const a=[...values].sort((x,y)=>x-y);const i=(a.length-1)*p;const lo=Math.floor(i),hi=Math.ceil(i);if(lo===hi)return a[lo];return a[lo]+(a[hi]-a[lo])*(i-lo)}
 function riskStats(rows){
-  const vals=(rows||[]).map(r=>num(r.count)).filter(v=>v>0);
-  if(!vals.length)return{min:0,max:0,p33:0,p66:0};
-  vals.sort((a,b)=>a-b);
-  const q=p=>vals[Math.min(vals.length-1,Math.max(0,Math.floor((vals.length-1)*p)))];
-  return{min:vals[0],max:vals[vals.length-1],p33:q(.33),p66:q(.66)};
+  const values=(rows||[]).map(r=>n(r.count)).filter(v=>v>0);
+  if(!values.length)return{min:0,max:0,q33:0,q66:0};
+  return{min:Math.min(...values),max:Math.max(...values),q33:quantile(values,.33),q66:quantile(values,.66)};
 }
-function riskColor(count,stats){
-  const c=num(count); if(c<=0)return'#94a3b8';
-  if(stats.max===stats.min)return'#dc2626';
-  if(c>=stats.p66)return'#dc2626';
-  if(c>=stats.p33)return'#facc15';
-  return'#16a34a';
+function riskLevel(v,stats){
+  v=n(v); if(v<=0)return'No Data';
+  if(stats.max===stats.min)return'High';
+  if(v>=stats.q66)return'High';
+  if(v>=stats.q33)return'Medium';
+  return'Low';
 }
-function color3(t){
-  const clamp=Math.max(0,Math.min(1,t));
-  const stops=[[0,[22,163,74]],[0.5,[250,204,21]],[1,[220,38,38]]];
-  let a=stops[0],b=stops[2];
-  if(clamp<=.5)b=stops[1]; else a=stops[1];
-  const u=(clamp-a[0])/(b[0]-a[0]||1);
-  const c=a[1].map((v,i)=>Math.round(v+(b[1][i]-v)*u));
-  return 'rgba('+c[0]+','+c[1]+','+c[2]+',0.88)';
-}
-function colorCssHex(t){
-  const clamp=Math.max(0,Math.min(1,t));
-  const stops=[[0,[22,163,74]],[.5,[250,204,21]],[1,[220,38,38]]];
-  let a=stops[0],b=stops[2]; if(clamp<=.5)b=stops[1]; else a=stops[1];
-  const u=(clamp-a[0])/(b[0]-a[0]||1); const c=a[1].map((v,i)=>Math.round(v+(b[1][i]-v)*u));
-  return '#'+c.map(x=>x.toString(16).padStart(2,'0')).join('');
-}
+function riskColor(v,stats){const l=riskLevel(v,stats);return l==='High'?'#dc2626':l==='Medium'?'#facc15':l==='Low'?'#16a34a':NO_DATA;}
 
-function makeHeatDataURL(features,rows,width,height,seedLabel){
-  const bounds=geoBounds(features); if(!bounds||!rows.length)return null;
-  const padLat=(bounds.maxLat-bounds.minLat)*.015||.002, padLng=(bounds.maxLng-bounds.minLng)*.015||.002;
-  const b={minLat:bounds.minLat-padLat,maxLat:bounds.maxLat+padLat,minLng:bounds.minLng-padLng,maxLng:bounds.maxLng+padLng};
-  const canvas=document.createElement('canvas'); canvas.width=width; canvas.height=height;
-  const ctx=canvas.getContext('2d'); const img=ctx.createImageData(width,height);
-  const pts=rows.filter(r=>Number.isFinite(r.lat)&&Number.isFinite(r.lng)&&num(r.count)>0).map(r=>({lat:r.lat,lng:r.lng,w:Math.log1p(num(r.count))}));
-  if(!pts.length)return{url:canvas.toDataURL(),bounds:[[b.minLat,b.minLng],[b.maxLat,b.maxLng]]};
-  let minScore=Infinity,maxScore=-Infinity;
-  const vals=new Float32Array(width*height); const denom=new Float32Array(width*height);
-  const minDim=Math.min(b.maxLat-b.minLat,b.maxLng-b.minLng); const nearest=[];
-  pts.forEach((p,i)=>{let d=Infinity;pts.forEach((q,j)=>{if(i!==j)d=Math.min(d,pointDist(p,q));});nearest.push(Number.isFinite(d)?d:minDim*.22);});
-  let sigma=nearest.reduce((a,v)=>a+v,0)/nearest.length*.95; sigma=Math.max(minDim*.045,Math.min(minDim*.18,sigma||minDim*.1));
-  // Keep the surface local. Very high counts increase intensity, not geographic spread.
-  for(let y=0;y<height;y++){
-    const lat=b.maxLat-(y/(height-1))*(b.maxLat-b.minLat);
-    for(let x=0;x<width;x++){
-      const lng=b.minLng+(x/(width-1))*(b.maxLng-b.minLng);
-      if(!featureGeometryContains(features,lat,lng))continue;
-      let nume=0,den=0;
-      for(const p of pts){const d=pointDist({lat,lng},p); const k=Math.exp(-(d*d)/(2*sigma*sigma)); nume+=p.w*k; den+=k;}
-      const score=den?`0`===seedLabel?0:(nume/den):0;
-      vals[y*width+x]=score; denom[y*width+x]=den;
-      if(den>0){minScore=Math.min(minScore,score);maxScore=Math.max(maxScore,score);}
-    }
-  }
-  const lo=minScore, hi=maxScore; const span=(hi-lo)||1;
-  for(let y=0;y<height;y++) for(let x=0;x<width;x++){
-    const idx=y*width+x; const off=idx*4; const lat=b.maxLat-(y/(height-1))*(b.maxLat-b.minLat); const lng=b.minLng+(x/(width-1))*(b.maxLng-b.minLng);
-    if(!featureGeometryContains(features,lat,lng)||denom[idx]<=0){img.data[off+3]=0;continue;}
-    let t=(vals[idx]-lo)/span;
-    // Compress the upper end so one extreme district does not paint the whole municipality red.
-    t=Math.pow(Math.max(0,Math.min(1,t)),1.35);
-    const rgb=colorCssHex(t); const r=parseInt(rgb.slice(1,3),16),g=parseInt(rgb.slice(3,5),16),bl=parseInt(rgb.slice(5,7),16);
-    img.data[off]=r;img.data[off+1]=g;img.data[off+2]=bl;img.data[off+3]=205;
-  }
-  ctx.putImageData(img,0,0);
-  return{url:canvas.toDataURL('image/png'),bounds:[[b.minLat,b.minLng],[b.maxLat,b.maxLng]]};
+/* =========================================================
+   CLEAR / BACK
+   ========================================================= */
+function clearHeat(){
+  Object.keys(heatOverlays).forEach(k=>{if(heatOverlays[k]&&map.hasLayer(heatOverlays[k]))map.removeLayer(heatOverlays[k]);});
+  heatOverlays={};
 }
-function clearHeat(){Object.keys(heatLayers).forEach(c=>{if(heatLayers[c]){map.removeLayer(heatLayers[c]);heatLayers[c]=null;}});}
-function drawCityHeat(city,rows){
-  if(heatLayers[city])map.removeLayer(heatLayers[city]);
-  const data=makeHeatDataURL(cityFeatures[city],rows,420,420,city);
-  if(!data)return;
-  heatLayers[city]=L.imageOverlay(data.url,data.bounds,{opacity:.78,interactive:false,zIndex:100}).addTo(map);
-}
-function clearAreas(){areaLayers.splice(0).forEach(l=>map.removeLayer(l));areaLabels.splice(0).forEach(l=>map.removeLayer(l));}
+function clearDistricts(){districtVisible.forEach(l=>{if(map.hasLayer(l))map.removeLayer(l)});districtVisible=[];}
+function clearAreas(){areaLayers.forEach(l=>{if(map.hasLayer(l))map.removeLayer(l)});areaLayers=[];areaLabels.forEach(l=>{if(map.hasLayer(l))map.removeLayer(l)});areaLabels=[];}
 
-function municipalityStyle(city){
-  const stats=riskStats(CITIES.map(c=>({count:municipalityTotals[c]})));
-  return{color:'#ffffff',weight:2,opacity:.9,fillColor:riskColor(municipalityTotals[city],stats),fillOpacity:.05};
-}
-function bindCityClicks(){
-  CITIES.forEach(city=>{
-    if(!cityBoundaries[city])return;
-    cityBoundaries[city].eachLayer(layer=>{
-      layer.setStyle(municipalityStyle(city));
-      layer.on('mouseover',()=>layer.setStyle({weight:3,fillOpacity:.08}));
-      layer.on('mouseout',()=>{if(state.level===0)layer.setStyle(municipalityStyle(city));});
-      layer.on('click',e=>{L.DomEvent.stopPropagation(e);showFiveAreas(city);});
-      layer.bindTooltip('<b>Municipality:</b> '+city+'<br><b>Incidents:</b> '+municipalityTotals[city].toLocaleString()+'<br><b>Click:</b> divide into 5 areas',{sticky:true,className:'custom-tip'});
-    });
-  });
-}
-
-function chooseSeeds(rows,city){
-  const pts=rows.filter(r=>Number.isFinite(r.lat)&&Number.isFinite(r.lng));
-  const center=cityCenters[city]||getCenterFromRows(rows);
-  if(!pts.length){return Array.from({length:5},(_,i)=>offsetSeed(center,i,5));}
-  const seeds=[pts.reduce((best,p)=>best&&num(best.count)>=num(p.count)?best:p,pts[0])];
-  while(seeds.length<Math.min(5,pts.length)){
-    let best=null,bestScore=-Infinity;
-    pts.forEach(p=>{let d=Infinity;seeds.forEach(s=>d=Math.min(d,pointDist(p,s))); const score=d*(1+Math.log1p(num(p.count))); if(score>bestScore){bestScore=score;best=p;}});
-    seeds.push(best);
-  }
-  while(seeds.length<5)seeds.push(offsetSeed(center,seeds.length,5));
-  return seeds.map((s,i)=>({lat:s.lat,lng:s.lng,label:'Area '+(i+1)}));
-}
-function offsetSeed(center,i,n){const r=.18;const a=(Math.PI*2*i/n);return{lat:center.lat+Math.sin(a)*r,lng:center.lng+Math.cos(a)*r};}
-function getCenterFromRows(rows){const p=rows.filter(r=>Number.isFinite(r.lat)&&Number.isFinite(r.lng)); if(!p.length)return{lat:26.42,lng:50.1}; return{lat:p.reduce((a,r)=>a+r.lat,0)/p.length,lng:p.reduce((a,r)=>a+r.lng,0)/p.length};}
-
-// Clip a convex polygon by a half-plane n.x + c <= 0.
-function clipHalfPlane(poly,A,B){
-  if(!poly.length)return[];
-  const out=[]; const ax=B.lng-A.lng, ay=B.lat-A.lat;
-  // Voronoi condition: dist(P,A)^2 <= dist(P,B)^2.
-  // Rearranged: 2(B-A).P <= |B|^2-|A|^2
-  const nx=2*(B.lng-A.lng), ny=2*(B.lat-A.lat), cc=(A.lng*A.lng+A.lat*A.lat-B.lng*B.lng-B.lat*B.lat);
-  function val(p){return nx*p.lng+ny*p.lat+cc;}
-  for(let i=0;i<poly.length;i++){
-    const S=poly[i],E=poly[(i+1)%poly.length]; const vs=val(S),ve=val(E); const insS=vs<=0,insE=ve<=0;
-    if(insS&&insE){out.push(E);}
-    else if(insS&&!insE){const t=vs/(vs-ve);out.push({lat:S.lat+(E.lat-S.lat)*t,lng:S.lng+(E.lng-S.lng)*t});}
-    else if(!insS&&insE){const t=vs/(vs-ve);out.push({lat:S.lat+(E.lat-S.lat)*t,lng:S.lng+(E.lng-S.lng)*t});out.push(E);}
-  }
-  return out;
-}
-function bboxPolygon(b){return[{lat:b.minLat,lng:b.minLng},{lat:b.maxLat,lng:b.minLng},{lat:b.maxLat,lng:b.maxLng},{lat:b.minLat,lng:b.maxLng}];}
-function voronoiCells(features,seeds){
-  const b=geoBounds(features); if(!b)return[]; const box=bboxPolygon(b); const cells=[];
-  seeds.forEach((s,i)=>{let cell=box; seeds.forEach((o,j)=>{if(i!==j)cell=clipHalfPlane(cell,s,o);}); cells.push(cell.filter((p,k,arr)=>k===0||pointDist(p,arr[k-1])>1e-9));});
-  return cells;
-}
-function pointInsidePolygonObj(pt,poly){let inside=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];const hit=((a.lat>pt.lat)!==(b.lat>pt.lat))&&(pt.lng<(b.lng-a.lng)*(pt.lat-a.lat)/((b.lat-a.lat)||1e-12)+a.lng);if(hit)inside=!inside;}return inside;}
-function assignRowsToSeeds(rows,seeds){return seeds.map(s=>[]).map((_,i)=>[]).concat();}
-function assignRows(rows,seeds){const groups=seeds.map(()=>[]);rows.forEach(r=>{if(!Number.isFinite(r.lat)||!Number.isFinite(r.lng)){groups[0].push(r);return;}let bi=0,bd=Infinity;seeds.forEach((s,i)=>{const d=pointDist(r,s);if(d<bd){bd=d;bi=i;}});groups[bi].push(r);});return groups;}
-function areaTooltip(city,i,rows){const total=rows.reduce((a,r)=>a+num(r.count),0);return '<b>'+city+' — Area '+(i+1)+'</b><br><b>Incidents:</b> '+total.toLocaleString()+'<br><b>Districts:</b> '+rows.length+'<br><b>Click:</b> view districts';}
-
-function showOverview(){
-  state={level:0,city:null,area:null}; clearAreas(); clearHeat();
-  // Style municipality outlines only; heat surfaces carry the actual visual intensity.
-  const totalRows=CITIES.map(c=>({count:municipalityTotals[c]}));
-  CITIES.forEach(city=>{
-    if(cityBoundaries[city])cityBoundaries[city].setStyle(municipalityStyle(city));
-    drawCityHeat(city,cityRows[city]);
-  });
-  const bounds=[]; CITIES.forEach(c=>{if(cityBoundaries[c])bounds.push(cityBoundaries[c].getBounds());});
-  if(bounds.length){const g=L.featureGroup(bounds.map(b=>L.rectangle(b,{opacity:0,fillOpacity:0})));if(g.getBounds().isValid())map.fitBounds(g.getBounds(),{padding:[25,25]});}
-  setInfo('🟢 Low &nbsp; 🟡 Medium &nbsp; 🔴 High &nbsp; | &nbsp; Click a municipality to divide it into 5 areas');
-  updateBackButton();
-}
-function showFiveAreas(city){
-  state={level:1,city,area:null}; clearHeat(); clearAreas();
-  CITIES.forEach(c=>{if(cityBoundaries[c])cityBoundaries[c].setStyle(c===city?{color:'#fff',weight:2.5,fillOpacity:0}:{color:'#aaa',weight:1,fillOpacity:0});});
-  const rows=cityRows[city]; const seeds=chooseSeeds(rows,city); const cells=voronoiCells(cityFeatures[city],seeds); const groups=assignRows(rows,seeds); 
-  cells.forEach((cell,i)=>{
-    if(cell.length<3)return;
-    const poly=L.polygon(cell.map(p=>[p.lat,p.lng]),{color:'#ffffff',weight:1.5,opacity:.85,fillColor:AREA_COLORS[i],fillOpacity:.28});
-    poly.bindTooltip(areaTooltip(city,i,groups[i]),{sticky:true,className:'custom-tip'});
-    poly.on('mouseover',()=>poly.setStyle({weight:2.5,fillOpacity:.38}));
-    poly.on('mouseout',()=>poly.setStyle({weight:1.5,fillOpacity:.28}));
-    poly.on('click',()=>showDistricts(city,i,seeds,cells,groups));
-    poly.addTo(map); areaLayers.push(poly);
-    const center=cell[Math.floor(cell.length/2)]||seeds[i];
-    const label=L.tooltip({permanent:true,direction:'center',className:'area-label',opacity:.95}).setLatLng([center.lat,center.lng]).setContent('Area '+(i+1));
-    label.addTo(map);areaLabels.push(label);
-  });
-  const b=cityBoundaries[city]?.getBounds(); if(b&&b.isValid())map.fitBounds(b,{padding:[60,60],maxZoom:14});
-  setInfo('<b>'+city+'</b> &nbsp;→&nbsp; 5 geographic areas &nbsp;|&nbsp; Click an area');
-  updateBackButton();
-}
-function showDistricts(city,index,seeds,cells,groups){
-  state={level:2,city,area:index}; clearAreas(); clearHeat();
-  CITIES.forEach(c=>{if(cityBoundaries[c])cityBoundaries[c].setStyle(c===city?{color:'#fff',weight:2.2,fillOpacity:0}:{color:'#aaa',weight:1,fillOpacity:0});});
-  const rows=groups[index]||[]; const stats=riskStats(rows);
-  // First show district polygons that exist in GeoJSON and belong to the selected area's district names.
-  const selectedNames=new Set(rows.map(r=>normAr(r.name)));
-  const points=[];
-  rows.forEach(r=>{if(Number.isFinite(r.lat)&&Number.isFinite(r.lng))points.push([r.lat,r.lng]);});
-  Object.values(districtMeta).filter(d=>d.city===city && selectedNames.has(normAr(d.name))).forEach(d=>{
-    const count=num((districtMeta[normAr(d.name)]||{}).count);
-    const layer=d.layer; const col=riskColor(count,stats);
-    layer.setStyle({color:'#ffffff',weight:1.4,opacity:.9,fillColor:col,fillOpacity:.55}); layer.addTo(map);
-    layer.bindTooltip('<b>District:</b> '+d.name+'<br><b>Municipality:</b> '+city+'<br><b>Incidents:</b> '+count.toLocaleString()+'<br><b>Risk:</b> '+(col==='#dc2626'?'High':col==='#facc15'?'Medium':'Low'),{sticky:true,className:'custom-tip'});
-  });
-  const heat=makeHeatDataURL(cityFeatures[city],rows,420,420,city+'-'+index); if(heat){const h=L.imageOverlay(heat.url,heat.bounds,{opacity:.38,interactive:false,zIndex:160}).addTo(map); areaLayers.push(h);}
-  points.length && map.fitBounds(L.latLngBounds(points),{padding:[70,70],maxZoom:17});
-  setInfo('<b>'+city+'</b> &nbsp;→&nbsp; Area '+(index+1)+' &nbsp;→&nbsp; <b>Districts</b> &nbsp;|&nbsp; District colors are based on this selected area');
-  updateBackButton();
-}
-
-function setInfo(html){document.getElementById('mapInfo').innerHTML=html;}
-
-const backControl=L.control({position:'topright'});
-backControl.onAdd=function(){const div=L.DomUtil.create('div','back-btn');div.textContent='← Back';L.DomEvent.disableClickPropagation(div);div.addEventListener('click',()=>{if(state.level===2)showFiveAreas(state.city);else if(state.level===1)showOverview();else showOverview();});backControl._button=div;return div;};
-backControl.addTo(map);
-function updateBackButton(){const b=backControl._button;if(!b)return;b.style.display=state.level?'block':'none';b.textContent=state.level===2?'← 5 Areas':'← Municipalities';}
+const back=L.control({position:'topright'});
+back.onAdd=function(){const d=L.DomUtil.create('button','back-btn');d.type='button';d.style.display='none';d.textContent='← Back';L.DomEvent.disableClickPropagation(d);d.addEventListener('click',()=>{
+  if(state.level===2)showFiveAreas(state.city);
+  else if(state.level===1)showOverview();
+});back._el=d;return d;};
+back.addTo(map);
+function updateBack(){const b=back._el;if(!b)return;b.style.display=state.level?'block':'none';b.textContent=state.level===2?'← 5 Areas':'← Municipalities';}
 
 const legend=L.control({position:'bottomleft'});
-legend.onAdd=function(){const d=L.DomUtil.create('div','legend');d.innerHTML='<div class="legend-title">Incident Risk</div><div class="legend-row"><span class="swatch sw-green"></span>Low</div><div class="legend-row"><span class="swatch sw-yellow"></span>Medium</div><div class="legend-row"><span class="swatch sw-red"></span>High</div>';return d;};
+legend.onAdd=function(){const d=L.DomUtil.create('div','legend');d.innerHTML='<div class="legend-title">Incident Risk</div><div class="legend-row"><span class="legend-dot lg-green"></span>Low</div><div class="legend-row"><span class="legend-dot lg-yellow"></span>Medium</div><div class="legend-row"><span class="legend-dot lg-red"></span>High</div>';return d;};
 legend.addTo(map);
 
-function loadBoundaryData(){
-  return Promise.all([
-    fetch('./municipality.geojson').then(r=>r.json()),
-    fetch('./dammam.geojson').then(r=>r.json()),
-    fetch('./dhahran.geojson').then(r=>r.json()),
-    fetch('./khobar.geojson').then(r=>r.json())
-  ]).then(([mun,dammam,dhahran,khobar])=>{
-    if(mun&&Array.isArray(mun.features)){
-      mun.features.forEach(f=>{
-        const name=String(f.properties?.REMARKS??f.properties?.NameEn??f.properties?.NAME??f.properties?.name??'').trim();
-        const city=cityFromName(name); if(!city)return;
-        cityFeatures[city].push(f);
-        if(!cityBoundaries[city])cityBoundaries[city]=L.geoJSON(null,{style:municipalityStyle(city)}).addTo(map);
-        cityBoundaries[city].addData(f);
-      });
+/* =========================================================
+   HEAT CANVAS
+   - Local Gaussian influence
+   - Log-scaled counts prevent one value from painting whole city
+   - Transparent outside municipality geometry
+   ========================================================= */
+function makeHeatOverlay(city,features,rows,labelKey){
+  if(!features.length||!rows.length)return null;
+  const bbox=featuresBounds(features); if(!bbox)return null;
+  const [minLng,minLat,maxLng,maxLat]=bbox;
+  const width=HEAT_RES,height=HEAT_RES;
+  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+  const ctx=canvas.getContext('2d');const img=ctx.createImageData(width,height);
+  const valid=rows.filter(r=>Number.isFinite(r.lat)&&Number.isFinite(r.lng)&&n(r.count)>0);
+  if(!valid.length)return null;
+
+  const spanLng=Math.max(maxLng-minLng,1e-6),spanLat=Math.max(maxLat-minLat,1e-6);
+  const normalizedPts=valid.map(r=>({
+    x:(r.lng-minLng)/spanLng,
+    y:1-(r.lat-minLat)/spanLat,
+    w:Math.log1p(n(r.count))
+  }));
+  const diag=Math.sqrt(spanLng*spanLng+spanLat*spanLat);
+  let sigma=diag*HEAT_RADIUS_FACTOR;
+  if(valid.length>1){
+    let nn=[];
+    valid.forEach((p,i)=>{let best=Infinity;valid.forEach((q,j)=>{if(i!==j)best=Math.min(best,dist(p,q));});if(Number.isFinite(best))nn.push(best)});
+    if(nn.length)sigma=Math.max(diag*.035,Math.min(diag*.14,(nn.reduce((a,b)=>a+b,0)/nn.length)*2.2));
+  }
+  const sigmaPx=Math.max(7,sigma/Math.max(spanLng,spanLat)*width);
+  const values=new Float32Array(width*height);
+  let lo=Infinity,hi=-Infinity;
+  for(let py=0;py<height;py++){
+    const lat=maxLat-(py/(height-1))*spanLat;
+    for(let px=0;px<width;px++){
+      const lng=minLng+(px/(width-1))*spanLng;
+      if(!pointInside(features,lat,lng))continue;
+      let s=0;
+      for(const p of normalizedPts){
+        const dx=px-p.x*(width-1),dy=py-p.y*(height-1);
+        const d2=dx*dx+dy*dy;
+        s=Math.max(s,p.w*Math.exp(-d2/(2*sigmaPx*sigmaPx)));
+      }
+      values[py*width+px]=s;
+      if(s>0){lo=Math.min(lo,s);hi=Math.max(hi,s)}
     }
-    const districtSets=[[dammam,'Dammam'],[dhahran,'Dhahran'],[khobar,'Khobar']];
-    districtSets.forEach(([data,city])=>{
-      if(!data||!Array.isArray(data.features))return;
-      data.features.forEach(f=>{
-        const name=String(f.properties?.REMARKS??f.properties?.NameEn??f.properties?.NAME??f.properties?.name??'').trim(); if(!name)return;
-        const key=normAr(name);
-        const layer=L.geoJSON(f,{style:{color:'#94a3b8',weight:1,opacity:.4,fillColor:'#94a3b8',fillOpacity:0.02}});
-        districtMeta[key]={name,city,layer,count:0}; districtLayers[name]=layer; layer.addTo(map);
-        // District boundaries are hidden at municipality/5-area level.
-        layer.eachLayer(l=>l.on('click',()=>{const d=districtMeta[normAr(name)];window.parent.postMessage({type:'mapClick',state:name,municipality:city,lat:d?.center?.lat??null,long:d?.center?.lng??null},'*');}));
-        const c=featureCenter(f); if(c)districtMeta[key].center=c;
-        layer.remove();
-      });
-    });
-    mapReady=true;
-    if(pendingRows){applyIncidentData(pendingRows);pendingRows=null;}else showOverview();
-    window.parent.postMessage({type:'iframeReady'},'*');
-  }).catch(err=>{console.error('GeoJSON loading error',err);setInfo('GeoJSON loading failed — check the four GeoJSON files and their paths.');});
+  }
+  const range=Math.max(hi-lo,1e-6);
+  for(let py=0;py<height;py++){
+    const lat=maxLat-(py/(height-1))*spanLat;
+    for(let px=0;px<width;px++){
+      const idx=py*width+px,off=idx*4;
+      if(!pointInside(features,lat,minLng+(px/(width-1))*spanLng)||values[idx]<=0){img.data[off+3]=0;continue;}
+      let t=(values[idx]-lo)/range;
+      // Compress very high end slightly so the map keeps visible green/yellow transition.
+      t=Math.pow(Math.max(0,Math.min(1,t)),.85);
+      let r,g,b;
+      if(t<.5){const u=t/.5;r=Math.round(50+(246-50)*u);g=Math.round(168+(216-168)*u);b=Math.round(82+(74-82)*u)}
+      else{const u=(t-.5)/.5;r=Math.round(246+(220-246)*u);g=Math.round(216+(38-216)*u);b=Math.round(74+(38-74)*u)}
+      const alpha=Math.round(255*Math.min(1,.18+.72*Math.pow(t,.65)));
+      img.data[off]=r;img.data[off+1]=g;img.data[off+2]=b;img.data[off+3]=alpha;
+    }
+  }
+  ctx.putImageData(img,0,0);
+  return L.imageOverlay(canvas.toDataURL('image/png'),[[minLat,minLng],[maxLat,maxLng]],{opacity:HEAT_OPACITY,interactive:false,zIndex:120});
+}
+function drawCityHeat(city,rows){
+  if(!cityFeatures[city]?.length)return;
+  const heat=makeHeatOverlay(city,cityFeatures[city],rows,city);
+  if(heat){heat.addTo(map);heatOverlays[city]=heat}
 }
 
-function applyIncidentData(rows){
-  CITIES.forEach(c=>{cityRows[c]=[];municipalityTotals[c]=0;});
-  Object.values(districtMeta).forEach(d=>d.count=0);
-  const districtKeyMap={}; Object.values(districtMeta).forEach(d=>districtKeyMap[normAr(d.name)]=d);
-  (rows||[]).forEach(r=>{
-    const name=rowName(r); const count=num(r.count); const lat=rowLat(r); const lng=rowLng(r); if(!name||count<0)return;
-    const exact=districtKeyMap[normAr(name)];
-    let city=exact?.city||cityFromName(r.municipality)||cityFromName(r.city)||null;
-    if(!city&&Number.isFinite(lat)&&Number.isFinite(lng)){city=CITIES.find(c=>featureGeometryContains(cityFeatures[c],lat,lng))||null;}
-    if(!city){
-      // Fallback: nearest municipality center if the GeoJSON does not contain the district name.
-      let best=null,bd=Infinity; CITIES.forEach(c=>{if(!cityCenters[c])return;const d=pointDist({lat:lat??cityCenters[c].lat,lng:lng??cityCenters[c].lng},cityCenters[c]);if(d<bd){bd=d;best=c;}}); city=best;
-    }
+/* =========================================================
+   MUNICIPALITY BOUNDARIES
+   ========================================================= */
+function boundaryStyle(){return{color:'#344054',weight:1.5,opacity:.9,fillOpacity:0,fill:false};}
+function loadMunicipalities(data){
+  if(!data||!Array.isArray(data.features))return;
+  data.features.forEach(f=>{
+    const raw=String(f.properties?.REMARKS??f.properties?.NameEn??f.properties?.NAME??f.properties?.name??'').trim();
+    const key=normAr(raw);
+    let city=null;
+    if(key==='الدمام'||key==='dammam')city='Dammam';
+    else if(key==='الظهران'||key==='dhahran')city='Dhahran';
+    else if(key==='الخبر'||key==='khobar'||key==='al khobar')city='Khobar';
     if(!city)return;
-    const item={name,count,lat,lng,city}; cityRows[city].push(item); municipalityTotals[city]+=count;
-    if(exact)exact.count+=count;
+    cityFeatures[city].push(f);
+    if(!cityBoundaryLayers[city]){
+      cityBoundaryLayers[city]=L.geoJSON(null,{style:boundaryStyle,onEachFeature:(feature,layer)=>{
+        layer.bindTooltip('',{sticky:true,className:'area-tip'});
+      }}).addTo(map);
+    }
+    cityBoundaryLayers[city].addData(f);
   });
-  CITIES.forEach(city=>{
-    if(!cityCenters[city]&&cityFeatures[city].length){const c=featureCenter(cityFeatures[city][0]); if(c)cityCenters[city]=c;}
-    if(!cityCenters[city])cityCenters[city]=getCenterFromRows(cityRows[city]);
-  });
-  // Hide all district polygons after refreshing counts.
-  Object.values(districtMeta).forEach(d=>{if(map.hasLayer(d.layer))map.removeLayer(d.layer);});
-  state={level:0,city:null,area:null};showOverview();
+  CITIES.forEach(c=>{if(cityFeatures[c].length){const fc=turf.featureCollection(cityFeatures[c]);const cc=turf.centroid(fc).geometry.coordinates;cityCenters[c]={lat:cc[1],lng:cc[0]};}});
 }
 
-window.addEventListener('message',e=>{
-  if(e.data?.type!=='incidentData')return;
-  const rows=Array.isArray(e.data.data)?e.data.data:[];
-  if(!mapReady){pendingRows=rows;return;} applyIncidentData(rows);
+/* =========================================================
+   DISTRICT GEOJSON
+   ========================================================= */
+function districtName(f){return String(f.properties?.REMARKS??f.properties?.NameEn??f.properties?.NAME??f.properties?.name??'').trim();}
+function registerDistricts(data,city){
+  if(!data||!Array.isArray(data.features))return;
+  data.features.forEach(f=>{
+    const name=districtName(f);if(!name)return;
+    const key=normAr(name);
+    const layer=L.geoJSON(f,{style:{color:'#64748b',weight:1.1,opacity:.9,fillColor:NO_DATA,fillOpacity:.08}});
+    const center=featureCenter(f);
+    const meta={name,key,city,feature:f,layer,center,count:0};
+    districtMeta[name]=meta;districtByKey[key]=meta;
+  });
+}
+
+/* =========================================================
+   CITY RESOLUTION
+   ========================================================= */
+function resolveCity(row){
+  const name=rowName(row),key=normAr(name);
+  if(districtByKey[key])return districtByKey[key].city;
+  const supplied=normAr(row?.municipality??row?.city??row?.parentLocationName??'');
+  if(supplied==='الدمام'||supplied==='dammam')return'Dammam';
+  if(supplied==='الظهران'||supplied==='dhahran')return'Dhahran';
+  if(supplied==='الخبر'||supplied==='khobar')return'Khobar';
+  const lat=rowLat(row),lng=rowLng(row);
+  if(Number.isFinite(lat)&&Number.isFinite(lng)){
+    for(const c of CITIES)if(pointInside(cityFeatures[c],lat,lng))return c;
+  }
+  let best=null,bd=Infinity;
+  CITIES.forEach(c=>{if(cityCenters[c]&&Number.isFinite(lat)&&Number.isFinite(lng)){const d=dist({lat,lng},cityCenters[c]);if(d<bd){bd=d;best=c}}});
+  return best;
+}
+
+/* =========================================================
+   APPLY GRAFANA DATA
+   ========================================================= */
+function applyIncidentData(rows){
+  CITIES.forEach(c=>{cityRows[c]=[];municipalityTotals[c]=0});
+  Object.values(districtMeta).forEach(m=>m.count=0);
+  (rows||[]).forEach(r=>{
+    const name=rowName(r),count=n(r.count),lat=rowLat(r),lng=rowLng(r);
+    if(!name||count<0)return;
+    const city=resolveCity(r);if(!city)return;
+    const item={name,count,lat,lng,city};
+    cityRows[city].push(item);municipalityTotals[city]+=count;
+    const dm=districtByKey[normAr(name)];if(dm)dm.count+=count;
+  });
+  showOverview();
+}
+
+/* =========================================================
+   OVERVIEW
+   ========================================================= */
+function showOverview(){
+  state.level=0;state.city=null;state.area=null;state.seeds=[];state.areasGeo=null;
+  clearAreas();clearDistricts();clearHeat();
+  CITIES.forEach(c=>{
+    if(cityBoundaryLayers[c])cityBoundaryLayers[c].setStyle(boundaryStyle());
+    drawCityHeat(c,cityRows[c]);
+  });
+  const boxes=CITIES.map(c=>cityBoundaryLayers[c]?.getBounds()).filter(b=>b&&b.isValid());
+  if(boxes.length){const all=L.featureGroup(boxes.map(b=>L.rectangle(b,{opacity:0,fillOpacity:0,interactive:false})));if(all.getBounds().isValid())map.fitBounds(all.getBounds(),{padding:[35,35]})}
+  const maxCity=Math.max(...CITIES.map(c=>municipalityTotals[c]),0);
+  setInfo('🟢 Low &nbsp; 🟡 Medium &nbsp; 🔴 High &nbsp; | &nbsp; Municipality heat intensity &nbsp; | &nbsp; Click a municipality');
+  updateBack();
+  // Make municipality clicks easy without drawing bubbles.
+  CITIES.forEach(c=>{
+    const layer=cityBoundaryLayers[c];if(!layer)return;
+    layer.off('click');layer.off('mouseover');layer.off('mouseout');
+    layer.on('mouseover',()=>layer.setStyle({color:'#111827',weight:3}));
+    layer.on('mouseout',()=>layer.setStyle(boundaryStyle()));
+    layer.on('click',()=>showFiveAreas(c));
+    const cityStats=riskStats(CITIES.map(x=>({count:municipalityTotals[x]})));
+    layer.eachLayer(l=>l.bindTooltip('<b>Municipality:</b> '+c+'<br><b>Incidents:</b> '+n(municipalityTotals[c]).toLocaleString()+'<br><b>Risk:</b> '+riskLevel(municipalityTotals[c],cityStats),{sticky:true,className:'area-tip'}));
+  });
+}
+
+/* =========================================================
+   5 GEOGRAPHIC AREAS
+   Uses Turf Voronoi from real district/incident points.
+   ========================================================= */
+function seedCandidates(rows){
+  return rows.filter(r=>Number.isFinite(r.lat)&&Number.isFinite(r.lng)).sort((a,b)=>n(b.count)-n(a.count));
+}
+function chooseFiveSeeds(rows,city){
+  const candidates=seedCandidates(rows);
+  if(!candidates.length){
+    const center=cityCenters[city];if(!center)return[];
+    const b=cityBoundaryLayers[city]?.getBounds();
+    const c=center, s=.004;
+    return [[0,0],[1,0],[2,0],[3,0],[4,0]].map((_,i)=>({name:'Area seed '+(i+1),lat:c.lat+Math.sin(i*1.256)*s,lng:c.lng+Math.cos(i*1.256)*s,count:0,synthetic:true}));
+  }
+  const seeds=[candidates[0]];
+  while(seeds.length<5&&seeds.length<candidates.length){
+    // deterministic farthest weighted point
+    let winner=null,wScore=-Infinity;
+    for(const c of candidates){if(seeds.includes(c))continue;let d=Infinity;seeds.forEach(s=>d=Math.min(d,dist(c,s)));const score=d*(1+Math.log1p(n(c.count)));if(score>wScore){wScore=score;winner=c}}
+    if(!winner)break;seeds.push(winner);
+  }
+  while(seeds.length<5){
+    const c=cityCenters[city];if(!c)break;const i=seeds.length;seeds.push({name:'Synthetic Area '+(i+1),lat:c.lat+Math.sin(i*1.256)*.006,lng:c.lng+Math.cos(i*1.256)*.006,count:0,synthetic:true});
+  }
+  return seeds.slice(0,5);
+}
+function makeVoronoiPolygons(seeds,city){
+  if(seeds.length<1)return[];
+  let pts=seeds.map(s=>turf.point([s.lng,s.lat],{seed:s}));
+  const fc=turf.featureCollection(pts);
+  let bbox=featuresBounds(cityFeatures[city]);
+  if(!bbox)return[];
+  const pad=Math.max(bbox[2]-bbox[0],bbox[3]-bbox[1])*.15;
+  bbox=[bbox[0]-pad,bbox[1]-pad,bbox[2]+pad,bbox[3]+pad];
+  const vor=turf.voronoi(fc,{bbox});
+  if(!vor)return[];
+  const out=[];
+  vor.features.forEach((poly,i)=>{
+    if(!poly)return;
+    try{
+      const clipped=turf.intersect(turf.featureCollection([poly,turf.featureCollection(cityFeatures[city])].flatMap(x=>x.type==='FeatureCollection'?x.features:[x])));
+      if(clipped)out.push({index:i,feature:clipped,seed:seeds[i]});
+    }catch(e){out.push({index:i,feature:poly,seed:seeds[i]})}
+  });
+  return out;
+}
+function assignToSeeds(rows,seeds){
+  const groups=seeds.map(()=>[]);rows.forEach(r=>{if(!Number.isFinite(r.lat)||!Number.isFinite(r.lng)){groups[0].push(r);return}let bi=0,bd=Infinity;seeds.forEach((s,i)=>{const d=dist(r,s);if(d<bd){bd=d;bi=i}});groups[bi].push(r)});return groups;}
+function showFiveAreas(city){
+  state.level=1;state.city=city;state.area=null;clearHeat();clearDistricts();clearAreas();
+  CITIES.forEach(c=>{if(cityBoundaryLayers[c])cityBoundaryLayers[c].setStyle(c===city?{color:'#111827',weight:2.5,opacity:1,fill:false,fillOpacity:0}:{color:'#9aa4b2',weight:1,opacity:.4,fill:false,fillOpacity:0})});
+  const rows=cityRows[city]||[];const seeds=chooseFiveSeeds(rows,city);state.seeds=seeds;
+  const groups=assignToSeeds(rows,seeds);const cells=makeVoronoiPolygons(seeds,city);state.areasGeo=cells;
+  cells.forEach((a,idx)=>{
+    const g=groups[idx]||[];const total=g.reduce((s,r)=>s+n(r.count),0);
+    const p=L.geoJSON(a.feature,{style:{color:'#fff',weight:1.5,opacity:.95,fillColor:AREA_COLORS[idx],fillOpacity:.24}}).addTo(map);
+    p.bindTooltip('<b>'+city+' — Area '+(idx+1)+'</b><br><b>Incidents:</b> '+total.toLocaleString()+'<br><b>District points:</b> '+g.length+'<br><b>Click to view districts',{sticky:true,className:'area-tip'});
+    p.on('mouseover',()=>p.setStyle({weight:2.7,fillOpacity:.35}));p.on('mouseout',()=>p.setStyle({weight:1.5,fillOpacity:.24}));p.on('click',()=>showDistricts(city,idx,g,a.feature));
+    areaLayers.push(p);
+    const cc=featureCenter(a.feature);if(cc){const label=L.tooltip({permanent:true,direction:'center',className:'area-tip',opacity:.9}).setLatLng([cc.lat,cc.lng]).setContent('Area '+(idx+1));label.addTo(map);areaLabels.push(label)}
+  });
+  const b=cityBoundaryLayers[city]?.getBounds();if(b&&b.isValid())map.fitBounds(b,{padding:[55,55],maxZoom:14});
+  setInfo('<b>'+city+'</b> &nbsp;→&nbsp; <b>5 geographic areas</b> &nbsp; | &nbsp; Click any area');updateBack();
+}
+
+/* =========================================================
+   DISTRICT VIEW
+   ========================================================= */
+function showDistricts(city,index,rows,areaFeature){
+  state.level=2;state.city=city;state.area=index;clearAreas();clearHeat();clearDistricts();
+  CITIES.forEach(c=>{if(cityBoundaryLayers[c])cityBoundaryLayers[c].setStyle(c===city?{color:'#111827',weight:2.5,opacity:1,fill:false,fillOpacity:0}:{color:'#aab3bf',weight:1,opacity:.35,fill:false,fillOpacity:0})});
+  const selectedKeys=new Set(rows.map(r=>normAr(r.name)));
+  const stats=riskStats(rows);
+  Object.values(districtByKey).forEach(meta=>{
+    if(meta.city!==city||!selectedKeys.has(meta.key))return;
+    const col=riskColor(meta.count,stats);const layer=meta.layer;
+    layer.setStyle({color:'#fff',weight:1.4,opacity:.95,fillColor:col,fillOpacity:.68});layer.addTo(map);districtVisible.push(layer);
+    layer.bindTooltip('<b>District:</b> '+meta.name+'<br><b>Municipality:</b> '+city+'<br><b>Incidents:</b> '+n(meta.count).toLocaleString()+'<br><b>Risk:</b> '+riskLevel(meta.count,stats),{sticky:true,className:'area-tip'});
+    layer.off('mouseover').off('mouseout').off('click');
+    layer.on('mouseover',e=>e.target.setStyle({weight:2.8,fillOpacity:.82}));
+    layer.on('mouseout',e=>e.target.setStyle({weight:1.4,fillOpacity:.68}));
+    layer.on('click',()=>{const c=meta.center||cityCenters[city];window.parent.postMessage({type:'mapClick',state:meta.name,municipality:city,lat:c?.lat??null,long:c?.lng??null},'*');});
+  });
+  // Add a local heat surface behind the district polygons for the tornado/weather-map feel.
+  const localHeat=makeHeatOverlay(city,cityFeatures[city],rows,city+'-'+index);if(localHeat){localHeat.setOpacity(.30);localHeat.addTo(map);heatOverlays.local=localHeat}
+  const pts=rows.filter(r=>Number.isFinite(r.lat)&&Number.isFinite(r.lng));
+  if(pts.length)map.fitBounds(L.latLngBounds(pts.map(r=>[r.lat,r.lng])),{padding:[65,65],maxZoom:17});
+  else{const b=cityBoundaryLayers[city]?.getBounds();if(b&&b.isValid())map.fitBounds(b,{padding:[55,55]})}
+  setInfo('<b>'+city+'</b> &nbsp;→&nbsp; Area '+(index+1)+' &nbsp;→&nbsp; <b>Districts</b> &nbsp; | &nbsp; 🟢 Low 🟡 Medium 🔴 High');updateBack();
+}
+
+/* =========================================================
+   LOAD FILES
+   ========================================================= */
+async function load(){
+  try{
+    const responses=await Promise.all([
+      fetch(MUNICIPALITY_FILE),
+      fetch(CITY_FILES.Dammam),fetch(CITY_FILES.Dhahran),fetch(CITY_FILES.Khobar)
+    ]);
+    for(const r of responses)if(!r.ok)throw new Error('Failed to load '+r.url+' ('+r.status+')');
+    const [municipality,dammam,dhahran,khobar]=await Promise.all(responses.map(r=>r.json()));
+    loadMunicipalities(municipality);registerDistricts(dammam,'Dammam');registerDistricts(dhahran,'Dhahran');registerDistricts(khobar,'Khobar');
+    mapReady=true;
+    if(pendingRows){applyIncidentData(pendingRows);pendingRows=null}else showOverview();
+    window.parent.postMessage({type:'iframeReady'},'*');
+  }catch(err){console.error(err);setInfo('Map data could not be loaded. Make sure municipality.geojson, dammam.geojson, dhahran.geojson and khobar.geojson are available beside this HTML.');}
+}
+
+/* =========================================================
+   GRAFANA MESSAGE
+   ========================================================= */
+window.addEventListener('message',event=>{
+  if(event.data?.type!=='incidentData')return;
+  const rows=Array.isArray(event.data.data)?event.data.data:[];
+  if(!mapReady){pendingRows=rows;return;}
+  applyIncidentData(rows);
 });
 
-loadBoundaryData();
-
+load();
 })();
 </script>
 </body>
