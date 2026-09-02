@@ -4,222 +4,664 @@
 <meta charset="utf-8">
 <title>Municipality Incident Heat Map</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.control.layers.tree@1.1.0/L.Control.Layers.Tree.css">
+
 <style>
 html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;font-family:Arial,sans-serif}
-#map{width:100%;height:100vh;background:#bfe7f5}
-.leaflet-control-layers{max-height:80vh;overflow-y:auto;font-size:12px}
-.map-title{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(255,255,255,.94);border:1px solid #333;border-radius:8px;padding:7px 16px;font-size:14px;font-weight:800;color:#111;box-shadow:0 2px 7px rgba(0,0,0,.22);pointer-events:none;white-space:nowrap}
-.map-info{position:absolute;top:52px;left:50%;transform:translateX(-50%);z-index:9998;background:rgba(255,255,255,.90);border-radius:6px;padding:5px 11px;font-size:11px;color:#333;pointer-events:none;text-align:center}
-.map-back-button{background:white;border:1px solid #333;border-radius:7px;padding:7px 12px;font-size:13px;font-weight:800;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+#map{width:100%;height:100vh}
+
+.leaflet-control-layers{max-height:82vh;overflow-y:auto;font-size:13px}
+
+.map-title{
+ position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:9999;
+ background:rgba(255,255,255,.96);border:1px solid #222;border-radius:8px;
+ padding:7px 18px;font-size:14px;font-weight:800;color:#111;box-shadow:0 2px 7px rgba(0,0,0,.25);
+ pointer-events:none
+}
+.map-info{
+ position:absolute;top:52px;left:50%;transform:translateX(-50%);z-index:9998;
+ background:rgba(255,255,255,.92);border-radius:7px;padding:6px 12px;
+ font-size:11px;color:#222;pointer-events:none;text-align:center
+}
+.map-back-button{
+ background:#fff;border:1px solid #333;border-radius:7px;padding:7px 12px;
+ font-size:13px;font-weight:800;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3)
+}
 .map-back-button:hover{background:#f3f4f6}
-.risk-legend{background:rgba(255,255,255,.96);border:1px solid #333;border-radius:9px;padding:9px 12px;box-shadow:0 2px 8px rgba(0,0,0,.28);color:#111;font-size:12px;min-width:160px}
+
+.risk-legend{
+ background:rgba(255,255,255,.96);border:1px solid #333;border-radius:9px;
+ padding:9px 12px;box-shadow:0 2px 8px rgba(0,0,0,.28);color:#111;font-size:12px;min-width:150px
+}
 .risk-legend-title{font-weight:800;font-size:13px;text-align:center;margin-bottom:7px}
 .legend-row{display:flex;align-items:center;gap:7px;margin:4px 0}
-.legend-color{width:18px;height:18px;border-radius:3px;display:inline-block}
+.legend-color{width:18px;height:18px;border-radius:3px;border:none}
 .legend-green{background:#16a34a}.legend-yellow{background:#facc15}.legend-red{background:#dc2626}
-.custom-tooltip{background:rgba(255,255,255,.97);border:1px solid #222;border-radius:7px;box-shadow:0 2px 10px rgba(0,0,0,.30);color:#111;padding:7px 9px;font-size:12px;line-height:1.5}
-.group-label{background:transparent;border:0;box-shadow:none;color:#111;font-weight:900;font-size:12px;text-shadow:0 1px 2px white,0 -1px 2px white,1px 0 2px white,-1px 0 2px white;white-space:nowrap}
-@media(max-width:600px){.map-title{font-size:12px;padding:6px 10px}.risk-legend{min-width:130px;font-size:11px}}
+
+.area-label{
+ background:rgba(255,255,255,.92);border:0;border-radius:5px;padding:3px 6px;
+ color:#111;font-size:11px;font-weight:800;box-shadow:0 1px 4px rgba(0,0,0,.2)
+}
+@media(max-width:600px){
+ .map-title{font-size:12px;padding:6px 12px}
+ .risk-legend{min-width:125px;font-size:11px}
+}
 </style>
 </head>
+
 <body>
 <div id="map"></div>
 <div class="map-title">Municipality Incident Heat Map</div>
 <div id="map-info" class="map-info">🟢 Low &nbsp;&nbsp; 🟡 Medium &nbsp;&nbsp; 🔴 High</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.control.layers.tree@1.1.0/L.Control.Layers.Tree.js"></script>
+
 <script>
 /* =========================================================
-   MAP
+   MAP / CONSTANTS
    ========================================================= */
-const map=L.map('map',{maxZoom:18,zoomControl:true});
-const osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap contributors',maxZoom:19,opacity:.35}).addTo(map);
+const map=L.map("map",{maxZoom:18});
+const osm=L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
+ attribution:"&copy; OpenStreetMap contributors",maxZoom:19
+}).addTo(map);
 
-const CITIES=['Dammam','Dhahran','Khobar'];
-const districtCounts={};
-const districtToCity={};
-const districtNameLookup={};
-const districtLayers={};
+const CITIES=["Dammam","Dhahran","Khobar"];
+
 const municipalityBoundaryLayers={};
 const municipalityBoundaryFeatures={};
 const municipalityCenters={};
+const districtLayers={};
+const districtToCity={};
+const districtNameLookup={};
+const districtCounts={};
+
 const municipalityIncidentRows={Dammam:[],Dhahran:[],Khobar:[]};
 const municipalityTotals={Dammam:0,Dhahran:0,Khobar:0};
 
-const activeLayer=L.layerGroup().addTo(map);
-const groupLabelLayer=L.layerGroup().addTo(map);
+const municipalityLayer=L.layerGroup().addTo(map);
+const drillLayer=L.layerGroup().addTo(map);
+
 let drillLevel=0;
 let selectedMunicipality=null;
-let selectedCluster=null;
-let currentClusters=[];
+let selectedArea=null;
+let currentAreas=[];
 let mapReady=false;
 let pendingIncidentData=null;
 let refreshTimer=null;
 
 /* =========================================================
-   COLORS
+   NAME NORMALIZATION
    ========================================================= */
-const RISK={low:'#16a34a',medium:'#facc15',high:'#dc2626',nodata:'#cbd5e1'};
-const GROUP_COLORS=['#dc2626','#facc15','#16a34a','#3b82f6','#8b5cf6'];
-
-function normalizeName(value){return String(value||'').trim().replace(/\s+/g,' ').toLowerCase().replace(/[‐-‒–—―]/g,'-');}
-function normalizeArabic(value){return String(value||'').trim().replace(/[\u064B-\u065F\u0670]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/\s+/g,' ');}
-function districtLookupKey(name){return normalizeArabic(normalizeName(name));}
-function getDistrictCount(name){const k=districtLookupKey(name);return Number(districtCounts[name]?.count ?? districtNameLookup[k]?.count ?? 0);}
-function updateMapInfo(text){const el=document.getElementById('map-info');if(el)el.innerHTML=text;}
+function normalizeName(v){
+ return String(v||"").trim().replace(/\s+/g," ").toLowerCase().replace(/[‐-‒–—―]/g,"-");
+}
+function normalizeArabic(v){
+ return String(v||"").trim()
+  .replace(/[\u064B-\u065F\u0670]/g,"")
+  .replace(/[أإآ]/g,"ا").replace(/ى/g,"ي").replace(/ة/g,"ه")
+  .replace(/\s+/g," ");
+}
+function districtLookupKey(v){return normalizeArabic(normalizeName(v));}
 
 /* =========================================================
    GEOMETRY HELPERS
    ========================================================= */
-function pointInRing(lat,lng,ring){if(!ring||ring.length<3)return false;let inside=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){
-  const lngI=Number(ring[i][0]),latI=Number(ring[i][1]),lngJ=Number(ring[j][0]),latJ=Number(ring[j][1]);
-  const intersect=((latI>lat)!=(latJ>lat))&&(lng<((lngJ-lngI)*(lat-latI)/((latJ-latI)||1e-12)+lngI));
+function pointInRing(lat,lng,ring){
+ if(!ring||ring.length<3)return false;
+ let inside=false;
+ for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+  const lngI=Number(ring[i][0]),latI=Number(ring[i][1]);
+  const lngJ=Number(ring[j][0]),latJ=Number(ring[j][1]);
+  const intersect=((latI>lat)!=(latJ>lat)) &&
+   (lng<((lngJ-lngI)*(lat-latI)/((latJ-latI)||1e-12))+lngI);
   if(intersect)inside=!inside;
-}return inside;}
-function pointInPolygon(lat,lng,coordinates){if(!coordinates||!coordinates.length||!pointInRing(lat,lng,coordinates[0]))return false;for(let i=1;i<coordinates.length;i++)if(pointInRing(lat,lng,coordinates[i]))return false;return true;}
-function pointInGeometry(lat,lng,geometry){if(!geometry||!geometry.coordinates)return false;if(geometry.type==='Polygon')return pointInPolygon(lat,lng,geometry.coordinates);if(geometry.type==='MultiPolygon')return geometry.coordinates.some(p=>pointInPolygon(lat,lng,p));return false;}
-function resolveMunicipalityByCoordinates(lat,lng){if(!Number.isFinite(lat)||!Number.isFinite(lng))return null;for(const city of CITIES){for(const feature of municipalityBoundaryFeatures[city]||[]){if(pointInGeometry(lat,lng,feature.geometry))return city;}}return null;}
-function distanceSquared(lat1,lng1,lat2,lng2){const dx=(lng1-lng2)*Math.cos(((lat1+lat2)/2)*Math.PI/180),dy=lat1-lat2;return dx*dx+dy*dy;}
-function resolveMunicipalityFallback(lat,lng){if(!Number.isFinite(lat)||!Number.isFinite(lng))return null;let best=null,bestD=Infinity;CITIES.forEach(city=>{const c=municipalityCenters[city];if(!c)return;const d=distanceSquared(lat,lng,c.lat,c.long);if(d<bestD){bestD=d;best=city;}});return best;}
-function resolveMunicipality(name,lat,lng){const clean=String(name||'').trim();if(districtToCity[clean])return{city:districtToCity[clean],method:'district-geojson'};const n=districtNameLookup[districtLookupKey(clean)];if(n?.city)return{city:n.city,method:'district-normalized'};const b=resolveMunicipalityByCoordinates(lat,lng);if(b)return{city:b,method:'coordinate-boundary'};const f=resolveMunicipalityFallback(lat,lng);if(f)return{city:f,method:'municipality-fallback'};return{city:null,method:'unresolved'};}
-
-/* =========================================================
-   RISK — EACH VISIBLE LAYER IS CALCULATED SEPARATELY
-   ========================================================= */
-function calculateLayerRisk(items){const values=(items||[]).map(x=>Number(x.count||0)).filter(x=>x>0);if(!values.length)return{min:0,max:0,lowLimit:0,highLimit:0};const min=Math.min(...values),max=Math.max(...values);if(max===min)return{min,max,lowLimit:min,highLimit:min};const range=max-min;return{min,max,lowLimit:min+range*.33,highLimit:min+range*.66};}
-function getLayerRisk(count,stats){count=Number(count||0);if(count<=0)return{level:'No Data',color:RISK.nodata};if(!stats||stats.max<=0)return{level:'No Data',color:RISK.nodata};if(stats.max===stats.min||count>=stats.highLimit)return{level:'High',color:RISK.high};if(count>=stats.lowLimit)return{level:'Medium',color:RISK.medium};return{level:'Low',color:RISK.low};}
-
-/* =========================================================
-   TOOLTIP / UI
-   ========================================================= */
-function municipalityTooltipHtml(city,risk){const count=municipalityTotals[city]||0;return `<b>Municipality:</b> ${city}<br><b>Total Incidents:</b> ${count.toLocaleString()}<br><b>Risk:</b> ${risk.level}<br><br><b>Click the municipality to split it into 5 nearby areas</b>`;}
-function groupTooltipHtml(group){return `<b>${group.label}</b><br><b>Incidents:</b> ${group.count.toLocaleString()}<br><b>Districts:</b> ${group.items.length}<br><b>Click any colored area to show its districts</b>`;}
-function districtTooltipHtml(name,city,count,risk){return `<b>District:</b> ${name}<br><b>Municipality:</b> ${city}<br><b>Incidents:</b> ${Number(count||0).toLocaleString()}<br><b>Risk:</b> ${risk.level}`;}
-function clearActiveLayer(){activeLayer.clearLayers();groupLabelLayer.clearLayers();}
-
-/* =========================================================
-   MUNICIPALITY OVERVIEW — REAL POLYGON, NO BUBBLES
-   ========================================================= */
-function municipalityStyle(color,active=false){return{color:active?'#ffffff':'#ffffff',weight:active?2:1.2,opacity:.95,fillColor:color,fillOpacity:active?.82:.72};}
-function renderMunicipalityOverview(){clearActiveLayer();drillLevel=0;selectedMunicipality=null;selectedCluster=null;currentClusters=[];
-  const items=CITIES.map(city=>({city,count:municipalityTotals[city]||0}));
-  const stats=calculateLayerRisk(items);
-  CITIES.forEach(city=>{const layer=municipalityBoundaryLayers[city];if(!layer)return;const count=municipalityTotals[city]||0;const risk=getLayerRisk(count,stats);layer.setStyle(municipalityStyle(risk.color,false));layer.bringToBack();layer.unbindTooltip();layer.bindTooltip(municipalityTooltipHtml(city,risk),{sticky:true,opacity:.95,className:'custom-tooltip'});});
-  updateMapInfo('🟢 Low &nbsp;&nbsp; 🟡 Medium &nbsp;&nbsp; 🔴 High &nbsp;&nbsp; | &nbsp;&nbsp; Click a municipality to drill down');
-  updateBackButton();
+ }
+ return inside;
 }
-
-/* =========================================================
-   SPATIAL GROUPING — EXACTLY UP TO 5 NEARBY AREAS
-   Farthest-point seeding + k-means keeps nearby districts together.
-   ========================================================= */
-function getCentroid(rows){if(!rows||!rows.length)return null;let lat=0,lng=0;rows.forEach(r=>{lat+=Number(r.lat||0);lng+=Number(r.lng||0)});return{lat:lat/rows.length,lng:lng/rows.length};}
-function prepareRows(rows,city){return(rows||[]).map((row,index)=>{let lat=Number(row.lat),lng=Number(row.lng);if(!Number.isFinite(lat)||!Number.isFinite(lng)){const c=municipalityCenters[city];if(c){const angle=(index/Math.max(rows.length,1))*Math.PI*2;const radius=.008;lat=c.lat+Math.sin(angle)*radius;lng=c.long+Math.cos(angle)*radius;}}return{...row,lat,lng,city};});}
-function splitIntoFiveSpatial(rows){const valid=(rows||[]).filter(r=>Number.isFinite(r.lat)&&Number.isFinite(r.lng));if(!valid.length)return[];const k=Math.min(5,valid.length);if(k===1)return[valid];
-  const seeds=[];seeds.push({...valid[0]});
-  while(seeds.length<k){let best=null,bestD=-1;for(const p of valid){let d=Infinity;for(const s of seeds)d=Math.min(d,distanceSquared(p.lat,p.lng,s.lat,s.lng));if(d>bestD){bestD=d;best=p;}}if(!best)break;seeds.push({...best});}
-  let centers=seeds.map(s=>({lat:s.lat,lng:s.lng}));let groups=[];
-  for(let iter=0;iter<20;iter++){groups=Array.from({length:k},()=>[]);valid.forEach(p=>{let idx=0,bestD=Infinity;centers.forEach((c,i)=>{const d=distanceSquared(p.lat,p.lng,c.lat,c.lng);if(d<bestD){bestD=d;idx=i;}});groups[idx].push(p);});
-    for(let i=0;i<k;i++){if(!groups[i].length)continue;const c=getCentroid(groups[i]);centers[i]=c;}
+function pointInPolygon(lat,lng,coords){
+ if(!coords||!coords.length||!pointInRing(lat,lng,coords[0]))return false;
+ for(let i=1;i<coords.length;i++)if(pointInRing(lat,lng,coords[i]))return false;
+ return true;
+}
+function pointInGeometry(lat,lng,g){
+ if(!g||!g.coordinates)return false;
+ if(g.type==="Polygon")return pointInPolygon(lat,lng,g.coordinates);
+ if(g.type==="MultiPolygon")return g.coordinates.some(p=>pointInPolygon(lat,lng,p));
+ return false;
+}
+function resolveMunicipalityByCoordinates(lat,lng){
+ if(!Number.isFinite(lat)||!Number.isFinite(lng))return null;
+ for(const city of CITIES){
+  for(const f of municipalityBoundaryFeatures[city]||[]){
+   if(pointInGeometry(lat,lng,f.geometry))return city;
   }
-  /* Repair empty groups, if any, by moving the farthest member of the largest group. */
-  for(let i=0;i<k;i++){if(groups[i].length)continue;let donor=groups.reduce((a,g,idx)=>g.length>(groups[a]?.length||0)?idx:a,0);if(!groups[donor].length)continue;let far=groups[donor][0],farD=-1,dc=getCentroid(groups[donor]);groups[donor].forEach(p=>{const d=distanceSquared(p.lat,p.lng,dc.lat,dc.lng);if(d>farD){farD=d;far=p;}});groups[donor]=groups[donor].filter(p=>p!==far);groups[i]=[far];}
-  return groups.filter(g=>g.length).map((items,index)=>({index,items,count:items.reduce((s,r)=>s+Number(r.count||0),0),center:getCentroid(items)}));
+ }
+ return null;
 }
-function createClusters(rows){return splitIntoFiveSpatial(rows).map((g,index)=>({...g,id:`${Date.now()}_${index}_${Math.random()}`,label:`Area ${index+1}`}));}
+function distanceSquared(a,b){
+ const dx=(a.lng-b.lng)*Math.cos(((a.lat+b.lat)/2)*Math.PI/180);
+ const dy=a.lat-b.lat;
+ return dx*dx+dy*dy;
+}
+function resolveMunicipalityFallback(lat,lng){
+ if(!Number.isFinite(lat)||!Number.isFinite(lng))return null;
+ let best=null,d=Infinity;
+ CITIES.forEach(city=>{
+  const c=municipalityCenters[city]; if(!c)return;
+  const x=distanceSquared({lat,lng},{lat:c.lat,lng:c.long});
+  if(x<d){d=x;best=city;}
+ });
+ return best;
+}
+function resolveMunicipality(name,lat,lng){
+ const exact=districtToCity[name];
+ if(exact)return {city:exact,method:"district-geojson"};
+ const n=districtNameLookup[districtLookupKey(name)];
+ if(n?.city)return {city:n.city,method:"district-normalized"};
+ const b=resolveMunicipalityByCoordinates(lat,lng);
+ if(b)return {city:b,method:"coordinate-boundary"};
+ const f=resolveMunicipalityFallback(lat,lng);
+ if(f)return {city:f,method:"municipality-fallback"};
+ return {city:null,method:"unresolved"};
+}
 
 /* =========================================================
-   LEVEL 1 — COLOR THE ACTUAL DISTRICT POLYGONS BY 5 SPATIAL AREAS
-   No circle / bubble markers are created.
+   RISK
    ========================================================= */
-function showMunicipality(city){selectedMunicipality=city;selectedCluster=null;drillLevel=1;clearActiveLayer();const rows=prepareRows(municipalityIncidentRows[city]||[],city);currentClusters=createClusters(rows);
-  const boundary=municipalityBoundaryLayers[city];if(boundary){boundary.setStyle(municipalityStyle('#ffffff',true));boundary.bringToBack();if(boundary.getBounds().isValid())map.fitBounds(boundary.getBounds(),{padding:[55,55],maxZoom:13});}
-  const sorted=[...currentClusters].sort((a,b)=>b.count-a.count);const colorById=new Map(sorted.map((g,i)=>[g.id,GROUP_COLORS[i]||GROUP_COLORS[GROUP_COLORS.length-1]]));
-  currentClusters.forEach(group=>{group.color=colorById.get(group.id);group.items.forEach(row=>{const layer=districtLayers[districtLookupKey(row.name)];if(!layer)return;layer.setStyle({color:'#ffffff',weight:1.1,opacity:.95,fillColor:group.color,fillOpacity:.78});layer.bringToFront();layer.unbindTooltip();layer.bindTooltip(groupTooltipHtml(group),{sticky:true,opacity:.95,className:'custom-tooltip'});layer.off('click');layer.on('click',()=>showDistrictLevel(group,city));activeLayer.addLayer(layer);});
-    if(group.center){const label=L.marker([group.center.lat,group.center.lng],{interactive:false,icon:L.divIcon({className:'group-label',html:`${group.label}`,iconSize:[70,18],iconAnchor:[35,9]})});groupLabelLayer.addLayer(label);}
+function calculateLayerRisk(items){
+ const vals=(items||[]).map(x=>Number(x.count||0)).filter(x=>x>0);
+ if(!vals.length)return {min:0,max:0,lowLimit:0,highLimit:0};
+ const min=Math.min(...vals),max=Math.max(...vals);
+ if(max===min)return {min,max,lowLimit:min,highLimit:min};
+ const r=max-min;
+ return {min,max,lowLimit:min+r*.33,highLimit:min+r*.66};
+}
+function getRisk(count,stats){
+ count=Number(count||0);
+ if(count<=0)return {level:"No Data",color:"#94a3b8"};
+ if(!stats||stats.max<=0)return {level:"No Data",color:"#94a3b8"};
+ if(stats.max===stats.min)return {level:"High",color:"#dc2626"};
+ if(count>=stats.highLimit)return {level:"High",color:"#dc2626"};
+ if(count>=stats.lowLimit)return {level:"Medium",color:"#facc15"};
+ return {level:"Low",color:"#16a34a"};
+}
+
+/* =========================================================
+   TOOLTIP / INFO
+   ========================================================= */
+function setInfo(t){const e=document.getElementById("map-info");if(e)e.innerHTML=t;}
+function municipalityTooltip(city,risk){
+ return `<b>Municipality:</b> ${city}<br>
+ <b>Total Incidents:</b> ${(municipalityTotals[city]||0).toLocaleString()}<br>
+ <b>Risk:</b> ${risk.level}<br><br><b>Click municipality to split into 5 areas</b>`;
+}
+function districtTooltip(name,city,count,risk){
+ return `<b>District:</b> ${name}<br><b>Municipality:</b> ${city}<br>
+ <b>Incidents:</b> ${Number(count||0).toLocaleString()}<br><b>Risk:</b> ${risk.level}`;
+}
+function areaTooltip(area){
+ return `<b>${area.label}</b><br>
+ <b>Incidents:</b> ${area.count.toLocaleString()}<br>
+ <b>Districts:</b> ${area.items.length}<br><br>
+ <b>Click to show districts</b>`;
+}
+
+/* =========================================================
+   CONVEX HULL FOR THE 5 SPATIAL AREAS
+   ========================================================= */
+function cross(o,a,b){return (a.lng-o.lng)*(b.lat-o.lat)-(a.lat-o.lat)*(b.lng-o.lng);}
+function convexHull(points){
+ if(points.length<=1)return points.slice();
+ const pts=points.slice().sort((a,b)=>a.lng-b.lng||a.lat-b.lat);
+ const lower=[];
+ for(const p of pts){
+  while(lower.length>=2&&cross(lower[lower.length-2],lower[lower.length-1],p)<=0)lower.pop();
+  lower.push(p);
+ }
+ const upper=[];
+ for(let i=pts.length-1;i>=0;i--){
+  const p=pts[i];
+  while(upper.length>=2&&cross(upper[upper.length-2],upper[upper.length-1],p)<=0)upper.pop();
+  upper.push(p);
+ }
+ lower.pop();upper.pop();
+ return lower.concat(upper);
+}
+function makeSmallPolygon(center,radius){
+ const pts=[];
+ for(let i=0;i<12;i++){
+  const a=i*Math.PI*2/12;
+  pts.push([center.lat+Math.sin(a)*radius,center.lng+Math.cos(a)*radius]);
+ }
+ return pts;
+}
+function makeAreaPolygon(items,center,city){
+ const pts=items.filter(x=>Number.isFinite(x.lat)&&Number.isFinite(x.lng));
+ if(pts.length>=3){
+  const h=convexHull(pts);
+  const pad=.0008;
+  const expanded=h.map(p=>[
+   p.lat+(p.lat-center.lat)*pad,
+   p.lng+(p.lng-center.lng)*pad
+  ]);
+  return expanded.map(p=>[p.lat,p.lng]);
+ }
+ if(pts.length===2){
+  const a=pts[0],b=pts[1];
+  const dx=b.lng-a.lng,dy=b.lat-a.lat;
+  const len=Math.sqrt(dx*dx+dy*dy)||1;
+  const px=-dy/len*.003,py=dx/len*.003;
+  return [[a.lat+py,a.lng+px],[a.lat-py,a.lng-px],
+          [b.lat-py,b.lng-px],[b.lat+py,b.lng+px]];
+ }
+ return makeSmallPolygon(center,.0045);
+}
+
+/* =========================================================
+   SPATIAL K-MEANS: EXACTLY UP TO 5 NEARBY DISTRICT GROUPS
+   ========================================================= */
+function seedCenters(points,k){
+ const centers=[points[Math.floor(points.length/2)]];
+ while(centers.length<k){
+  let best=null,bestD=-1;
+  for(const p of points){
+   let d=Infinity;
+   for(const c of centers)d=Math.min(d,distanceSquared(p,c));
+   if(d>bestD){bestD=d;best=p;}
+  }
+  centers.push(best);
+ }
+ return centers.map(p=>({lat:p.lat,lng:p.lng}));
+}
+function spatialFiveGroups(rows){
+ const pts=rows.filter(r=>Number.isFinite(r.lat)&&Number.isFinite(r.lng));
+ if(!pts.length)return [];
+ const k=Math.min(5,pts.length);
+ let centers=seedCenters(pts,k);
+ let groups=[];
+ for(let iter=0;iter<25;iter++){
+  groups=Array.from({length:k},()=>[]);
+  pts.forEach(p=>{
+   let bi=0,bd=Infinity;
+   centers.forEach((c,i)=>{
+    const d=distanceSquared(p,c);
+    if(d<bd){bd=d;bi=i;}
+   });
+   groups[bi].push(p);
   });
-  updateMapInfo(`<b>${city}</b> → 5 nearby areas &nbsp; | &nbsp; click any colored area to see districts`);updateBackButton();
+  const next=groups.map((g,i)=>{
+   if(!g.length)return centers[i];
+   return {lat:g.reduce((s,p)=>s+p.lat,0)/g.length,lng:g.reduce((s,p)=>s+p.lng,0)/g.length};
+  });
+  const moved=next.some((c,i)=>distanceSquared(c,centers[i])>1e-10);
+  centers=next;
+  if(!moved)break;
+ }
+ return groups.map((items,i)=>{
+  const center=centers[i];
+  const count=items.reduce((s,r)=>s+Number(r.count||0),0);
+  return {
+   index:i,items,count,lat:center.lat,lng:center.lng,
+   label:`Area ${i+1}`,color:["#dc2626","#facc15","#16a34a","#0891b2","#7c3aed"][i]
+  };
+ });
 }
 
 /* =========================================================
-   LEVEL 2 — DISTRICTS INSIDE THE SELECTED AREA, RED/YELLOW/GREEN
+   MUNICIPALITY VIEW
    ========================================================= */
-function showDistrictLevel(group,city){selectedCluster=group;drillLevel=2;clearActiveLayer();const rows=group.items||[];if(!rows.length){updateMapInfo(`${city} → ${group.label} → No districts`);updateBackButton();return;}
-  const stats=calculateLayerRisk(rows);const points=[];
-  rows.forEach(row=>{const layer=districtLayers[districtLookupKey(row.name)];if(!layer)return;const count=Number(row.count||0);const risk=getLayerRisk(count,stats);layer.setStyle({color:'#ffffff',weight:1.1,opacity:.98,fillColor:risk.color,fillOpacity:count>0?.82:.18});layer.bringToFront();layer.unbindTooltip();layer.bindTooltip(districtTooltipHtml(row.name,city,count,risk),{sticky:true,opacity:.95,className:'custom-tooltip'});layer.off('click');layer.on('click',()=>window.parent.postMessage({type:'mapClick',state:row.name,municipality:city,lat:row.lat,long:row.lng},'*'));activeLayer.addLayer(layer);if(Number.isFinite(row.lat)&&Number.isFinite(row.lng))points.push([row.lat,row.lng]);});
-  if(points.length){const bounds=L.latLngBounds(points);if(bounds.isValid())map.fitBounds(bounds,{padding:[60,60],maxZoom:16});}
-  updateMapInfo(`<b>${city}</b> → <b>${group.label}</b> → districts colored by incident count`);updateBackButton();
+function municipalityStyle(city){
+ const items=[{count:municipalityTotals[city]||0}];
+ const stats=calculateLayerRisk(CITIES.map(c=>({count:municipalityTotals[c]||0})));
+ const risk=getRisk(municipalityTotals[city]||0,stats);
+ return {
+  color:"transparent",weight:0,opacity:0,
+  fillColor:risk.color,fillOpacity:.62
+ };
+}
+function updateMunicipalityStyles(){
+ const stats=calculateLayerRisk(CITIES.map(c=>({count:municipalityTotals[c]||0})));
+ CITIES.forEach(city=>{
+  const layer=municipalityBoundaryLayers[city];
+  if(!layer)return;
+  const risk=getRisk(municipalityTotals[city]||0,stats);
+  layer.setStyle({color:"transparent",weight:0,opacity:0,fillColor:risk.color,fillOpacity:.62});
+  layer.setTooltipContent(municipalityTooltip(city,risk));
+ });
+}
+function showMunicipalityOverview(){
+ drillLevel=0;selectedMunicipality=null;selectedArea=null;currentAreas=[];
+ drillLayer.clearLayers();
+ municipalityLayer.clearLayers();
+ CITIES.forEach(city=>{
+  const layer=municipalityBoundaryLayers[city];
+  if(layer)municipalityLayer.addLayer(layer);
+ });
+ updateMunicipalityStyles();
+ const boundaries=CITIES.map(c=>municipalityBoundaryLayers[c]).filter(Boolean);
+ if(boundaries.length){
+  const g=L.featureGroup(boundaries);
+  if(g.getBounds().isValid())map.fitBounds(g.getBounds(),{padding:[35,35]});
+ }
+ setInfo("🟢 Low &nbsp;&nbsp; 🟡 Medium &nbsp;&nbsp; 🔴 High &nbsp;&nbsp; | &nbsp;&nbsp; Click a municipality to drill down");
+ updateBackButton();
 }
 
 /* =========================================================
-   BACK — 2 → 1 → 0
+   LEVEL 2: FIVE AREAS
    ========================================================= */
-const backControl=L.control({position:'topright'});
-backControl.onAdd=function(){const div=L.DomUtil.create('div','map-back-button');div.innerHTML='← Back';div.style.display='none';L.DomEvent.disableClickPropagation(div);div.addEventListener('click',handleBack);return div};
+function showMunicipality(city){
+ selectedMunicipality=city;selectedArea=null;drillLevel=1;
+ municipalityLayer.clearLayers();drillLayer.clearLayers();
+
+ const rows=municipalityIncidentRows[city]||[];
+ currentAreas=spatialFiveGroups(rows);
+
+ if(!currentAreas.length){
+  setInfo(`<b>${city}</b> — No incident locations available`);
+  updateBackButton();return;
+ }
+
+ currentAreas.forEach(area=>{
+  const polygon=makeAreaPolygon(area.items,{lat:area.lat,lng:area.lng},city);
+  const layer=L.polygon(polygon,{
+   color:"transparent",weight:0,opacity:0,
+   fillColor:area.color,fillOpacity:.68
+  });
+  layer.bindTooltip(areaTooltip(area),{
+   sticky:true,direction:"top",opacity:.96,className:"custom-tooltip"
+  });
+  layer.on("click",()=>showAreaDistricts(area,city));
+  drillLayer.addLayer(layer);
+ });
+
+ const points=currentAreas.map(a=>[a.lat,a.lng]);
+ if(points.length)map.fitBounds(L.latLngBounds(points),{padding:[70,70],maxZoom:14});
+ setInfo(`<b>${city}</b> &nbsp;→&nbsp; <b>5 spatial areas</b> &nbsp;→&nbsp; Click an area to show districts`);
+ updateBackButton();
+}
+
+/* =========================================================
+   LEVEL 3: DISTRICTS
+   ========================================================= */
+function showAreaDistricts(area,city){
+ selectedArea=area;drillLevel=2;
+ drillLayer.clearLayers();
+
+ const rows=area.items||[];
+ const stats=calculateLayerRisk(rows);
+
+ rows.forEach(row=>{
+  if(!Number.isFinite(row.lat)||!Number.isFinite(row.lng))return;
+  const risk=getRisk(row.count,stats);
+
+  let layer=districtLayers[row.name];
+  if(layer){
+   layer=L.geoJSON(layer.toGeoJSON(),{
+    style:{
+     color:"transparent",weight:0,opacity:0,
+     fillColor:risk.color,fillOpacity:.72
+    }
+   });
+  }else{
+   layer=L.circle([row.lat,row.lng],{radius:220,color:"transparent",weight:0,
+    fillColor:risk.color,fillOpacity:.72});
+  }
+
+  layer.bindTooltip(districtTooltip(row.name,city,row.count,risk),{
+   sticky:true,direction:"top",opacity:.96,className:"custom-tooltip"
+  });
+  layer.on("click",()=>{
+   window.parent.postMessage({
+    type:"mapClick",state:row.name,municipality:city,
+    lat:row.lat,long:row.lng
+   },"*");
+  });
+  drillLayer.addLayer(layer);
+ });
+
+ const points=rows.filter(r=>Number.isFinite(r.lat)&&Number.isFinite(r.lng)).map(r=>[r.lat,r.lng]);
+ if(points.length)map.fitBounds(L.latLngBounds(points),{padding:[70,70],maxZoom:17});
+ setInfo(`<b>${city}</b> &nbsp;→&nbsp; <b>${area.label}</b> &nbsp;→&nbsp; <b>Districts</b> &nbsp; | &nbsp; 🟢 Low &nbsp; 🟡 Medium &nbsp; 🔴 High`);
+ updateBackButton();
+}
+
+/* =========================================================
+   BACK
+   ========================================================= */
+const backControl=L.control({position:"topright"});
+backControl.onAdd=function(){
+ const div=L.DomUtil.create("div","map-back-button");
+ div.innerHTML="← Back";div.style.display="none";
+ L.DomEvent.disableClickPropagation(div);
+ div.addEventListener("click",handleBack);
+ return div;
+};
 backControl.addTo(map);
-function handleBack(){if(drillLevel===2&&selectedMunicipality&&selectedCluster){showMunicipality(selectedMunicipality);return}if(drillLevel===1){renderMunicipalityOverview();return}renderMunicipalityOverview();}
-function updateBackButton(){const button=document.querySelector('.map-back-button');if(!button)return;if(drillLevel===0){button.style.display='none';return}button.style.display='block';button.innerHTML=drillLevel===1?'← Municipalities':'← 5 Areas';}
+
+function handleBack(){
+ if(drillLevel===2){
+  showMunicipality(selectedMunicipality);return;
+ }
+ if(drillLevel===1){
+  showMunicipalityOverview();return;
+ }
+ showMunicipalityOverview();
+}
+function updateBackButton(){
+ const b=document.querySelector(".map-back-button");
+ if(!b)return;
+ if(drillLevel===0){b.style.display="none";return;}
+ b.style.display="block";
+ b.innerHTML=drillLevel===1?"← Municipalities":"← 5 Areas";
+}
 
 /* =========================================================
-   DISTRICT BASE STYLE / NODES
+   DISTRICT DATA / LAYERS
    ========================================================= */
-function districtBaseStyle(){return{color:'#ffffff',weight:1,opacity:.8,fillColor:'#e2e8f0',fillOpacity:.06};}
-function makeDistrictNodes(data,city){if(!data||!Array.isArray(data.features))return[];return data.features.map(feature=>{const districtName=String(feature.properties?.REMARKS||feature.properties?.NameEn||feature.properties?.NAME||feature.properties?.name||'').trim();if(!districtName)return null;districtToCity[districtName]=city;districtNameLookup[districtLookupKey(districtName)]={name:districtName,city,count:getDistrictCount(districtName)};const layer=L.geoJSON(feature,{style:districtBaseStyle});districtLayers[districtLookupKey(districtName)]=layer;return{label:districtName,layer};}).filter(Boolean);}
+function getDistrictCount(name){
+ const x=districtNameLookup[districtLookupKey(name)];
+ if(x)return Number(x.count||0);
+ return Number(districtCounts[name]?.count||0);
+}
+function makeDistrictNodes(data,city){
+ if(!data||!Array.isArray(data.features))return [];
+ return data.features.map(feature=>{
+  const name=String(
+   feature.properties?.REMARKS||
+   feature.properties?.NameEn||
+   feature.properties?.NAME||
+   feature.properties?.name||""
+  ).trim();
+  if(!name)return null;
+
+  districtToCity[name]=city;
+  districtNameLookup[districtLookupKey(name)]={name,city,count:0};
+
+  const layer=L.geoJSON(feature,{
+   style:{color:"transparent",weight:0,opacity:0,fillColor:"#94a3b8",fillOpacity:0}
+  });
+  districtLayers[name]=layer;
+
+  return {label:name,layer};
+ }).filter(Boolean);
+}
 
 /* =========================================================
-   MUNICIPALITY BOUNDARIES
+   MUNICIPALITY GEOJSON LOADING
    ========================================================= */
-function municipalityFeatureCity(name){const n=normalizeArabic(name);if(n==='الدمام'||normalizeName(name)==='dammam')return'Dammam';if(n==='الظهران'||normalizeName(name)==='dhahran')return'Dhahran';if(n==='الخبر'||normalizeName(name)==='khobar')return'Khobar';return null;}
-function createMunicipalityBoundary(feature,city){if(!municipalityBoundaryFeatures[city])municipalityBoundaryFeatures[city]=[];municipalityBoundaryFeatures[city].push(feature);const layer=L.geoJSON(feature,{style:()=>municipalityStyle('#cbd5e1',false)});layer.on('click',()=>showMunicipality(city));layer.bindTooltip(`<b>Municipality:</b> ${city}<br><b>Click to split into 5 nearby areas</b>`,{sticky:true,opacity:.95,className:'custom-tooltip'});municipalityBoundaryLayers[city]=layer;const c=layer.getBounds().getCenter();municipalityCenters[city]={lat:c.lat,long:c.lng};layer.addTo(map);}
+function municipalityName(feature){
+ return String(
+  feature.properties?.REMARKS||
+  feature.properties?.NameEn||
+  feature.properties?.NAME||
+  feature.properties?.name||""
+ ).trim();
+}
+function municipalityCity(name){
+ const n=normalizeName(name);
+ const a=normalizeArabic(name);
+ if(name==="الدمام"||a==="الدمام"||n==="dammam")return "Dammam";
+ if(name==="الظهران"||a==="الظهران"||n==="dhahran")return "Dhahran";
+ if(name==="الخبر"||a==="الخبر"||n==="khobar"||n==="al khobar")return "Khobar";
+ return null;
+}
 
-/* =========================================================
-   LOAD GEOJSON
-   ========================================================= */
 Promise.all([
-  fetch('./municipality.geojson').then(r=>r.json()),
-  fetch('./dammam.geojson').then(r=>r.json()),
-  fetch('./dhahran.geojson').then(r=>r.json()),
-  fetch('./khobar.geojson').then(r=>r.json())
+ fetch("./municipality.geojson").then(r=>r.json()),
+ fetch("./dammam.geojson").then(r=>r.json()),
+ fetch("./dhahran.geojson").then(r=>r.json()),
+ fetch("./khobar.geojson").then(r=>r.json())
 ]).then(([municipalityData,dammamData,dhahranData,khobarData])=>{
-  if(municipalityData&&Array.isArray(municipalityData.features))municipalityData.features.forEach(feature=>{const name=String(feature.properties?.REMARKS||feature.properties?.NameEn||feature.properties?.NAME||feature.properties?.name||'').trim();const city=municipalityFeatureCity(name);if(city)createMunicipalityBoundary(feature,city);});
-  const dammamDistricts=makeDistrictNodes(dammamData,'Dammam');
-  const dhahranDistricts=makeDistrictNodes(dhahranData,'Dhahran');
-  const khobarDistricts=makeDistrictNodes(khobarData,'Khobar');
-  const overlaysTree={label:'Map Layers',selectAllCheckbox:false,children:[
-    {label:'Dammam',selectAllCheckbox:true,children:[{label:'Boundary',layer:municipalityBoundaryLayers.Dammam},{label:'Districts',selectAllCheckbox:true,children:dammamDistricts}]},
-    {label:'Dhahran',selectAllCheckbox:true,children:[{label:'Boundary',layer:municipalityBoundaryLayers.Dhahran},{label:'Districts',selectAllCheckbox:true,children:dhahranDistricts}]},
-    {label:'Khobar',selectAllCheckbox:true,children:[{label:'Boundary',layer:municipalityBoundaryLayers.Khobar},{label:'Districts',selectAllCheckbox:true,children:khobarDistricts}]}
-  ]};
-  L.control.layers.tree({'OpenStreetMap':osm},overlaysTree,{collapsed:false,namedToggle:true,selectorBack:false,closedSymbol:'▶',openedSymbol:'▼'}).addTo(map);
-  const boundaries=[municipalityBoundaryLayers.Dammam,municipalityBoundaryLayers.Dhahran,municipalityBoundaryLayers.Khobar].filter(Boolean);if(boundaries.length){const group=L.featureGroup(boundaries);if(group.getBounds().isValid())map.fitBounds(group.getBounds(),{padding:[30,30]});}
-  const legend=L.control({position:'bottomleft'});legend.onAdd=()=>{const div=L.DomUtil.create('div','risk-legend');div.innerHTML=`<div class="risk-legend-title">Incident Risk</div><div class="legend-row"><span class="legend-color legend-green"></span><span>Low</span></div><div class="legend-row"><span class="legend-color legend-yellow"></span><span>Medium</span></div><div class="legend-row"><span class="legend-color legend-red"></span><span>High</span></div>`;return div};legend.addTo(map);
-  mapReady=true;if(pendingIncidentData){applyIncidentData(pendingIncidentData);pendingIncidentData=null}else renderMunicipalityOverview();
-  window.parent.postMessage({type:'iframeReady'},'*');
-}).catch(err=>console.error('Error loading GeoJSON:',err));
+
+ /* Municipality boundaries are used as the actual heat-map polygons.
+    They are NOT added as ordinary gray boundaries and district layers
+    are NOT displayed at startup. */
+ (municipalityData?.features||[]).forEach(feature=>{
+  const city=municipalityCity(municipalityName(feature));
+  if(!city)return;
+
+  if(!municipalityBoundaryFeatures[city])municipalityBoundaryFeatures[city]=[];
+  municipalityBoundaryFeatures[city].push(feature);
+
+  const layer=L.geoJSON(feature,{
+   style:{color:"transparent",weight:0,opacity:0,fillColor:"#94a3b8",fillOpacity:.62}
+  });
+
+  municipalityBoundaryLayers[city]=layer;
+  layer.bindTooltip("",{sticky:true,direction:"top",opacity:.96,className:"custom-tooltip"});
+  layer.on("click",()=>showMunicipality(city));
+  layer.on("mouseover",()=>layer.setStyle({fillOpacity:.72}));
+  layer.on("mouseout",()=>layer.setStyle({fillOpacity:.62}));
+
+  const c=layer.getBounds().getCenter();
+  municipalityCenters[city]={lat:c.lat,long:c.lng};
+ });
+
+ makeDistrictNodes(dammamData,"Dammam");
+ makeDistrictNodes(dhahranData,"Dhahran");
+ makeDistrictNodes(khobarData,"Khobar");
+
+ /* Important: do NOT put district layers into the visible layer tree. */
+ const overlaysTree={
+  label:"Map Layers",selectAllCheckbox:false,
+  children:[{
+   label:"Municipalities",selectAllCheckbox:true,
+   children:CITIES.map(city=>({
+    label:city,layer:municipalityBoundaryLayers[city]
+   })).filter(x=>x.layer)
+  }]
+ };
+
+ L.control.layers.tree(
+  {"OpenStreetMap":osm},overlaysTree,
+  {collapsed:false,namedToggle:true,selectorBack:false,closedSymbol:"▶",openedSymbol:"▼"}
+ ).addTo(map);
+
+ const legend=L.control({position:"bottomleft"});
+ legend.onAdd=function(){
+  const div=L.DomUtil.create("div","risk-legend");
+  div.innerHTML=`
+   <div class="risk-legend-title">Incident Risk</div>
+   <div class="legend-row"><span class="legend-color legend-green"></span><span>Low</span></div>
+   <div class="legend-row"><span class="legend-color legend-yellow"></span><span>Medium</span></div>
+   <div class="legend-row"><span class="legend-color legend-red"></span><span>High</span></div>`;
+  return div;
+ };
+ legend.addTo(map);
+
+ mapReady=true;
+ if(pendingIncidentData){applyIncidentData(pendingIncidentData);pendingIncidentData=null;}
+ else showMunicipalityOverview();
+
+ window.parent.postMessage({type:"iframeReady"},"*");
+}).catch(err=>{
+ console.error("Error loading GeoJSON:",err);
+ setInfo("GeoJSON loading error — check the four GeoJSON file paths.");
+});
 
 /* =========================================================
-   APPLY GRAFANA DATA
+   GRAFANA DATA
    ========================================================= */
 function applyIncidentData(rows){
-  Object.keys(districtCounts).forEach(k=>delete districtCounts[k]);Object.keys(districtNameLookup).forEach(k=>delete districtNameLookup[k]);CITIES.forEach(city=>{municipalityTotals[city]=0;municipalityIncidentRows[city]=[];});
-  (rows||[]).forEach(row=>{const name=String(row.state||'').trim();const count=Number(row.count||0);let lat=Number(row.lat),lng=Number(row.long);if(!name||!Number.isFinite(count))return;if(!Number.isFinite(lat))lat=null;if(!Number.isFinite(lng))lng=null;const resolution=resolveMunicipality(name,lat,lng);if(!resolution.city){console.warn('Could not resolve municipality:',{name,count,lat,lng});return;}const city=resolution.city;municipalityTotals[city]+=count;
-    const exactDistrict=districtToCity[name];if(exactDistrict)districtCounts[exactDistrict]={count,lat,long:lng};
-    districtNameLookup[districtLookupKey(name)]={name,city,count};
-    municipalityIncidentRows[city].push({name,count,lat,lng,city,method:resolution.method});
+ Object.keys(districtCounts).forEach(k=>delete districtCounts[k]);
+ Object.keys(districtNameLookup).forEach(k=>delete districtNameLookup[k]);
+ CITIES.forEach(city=>{
+  municipalityTotals[city]=0;
+  municipalityIncidentRows[city]=[];
+ });
+
+ (rows||[]).forEach(row=>{
+  const name=String(row.state||"").trim();
+  const count=Number(row.count||0);
+  let lat=Number(row.lat),lng=Number(row.long);
+  if(!name||!Number.isFinite(count))return;
+  if(!Number.isFinite(lat))lat=null;
+  if(!Number.isFinite(lng))lng=null;
+
+  const res=resolveMunicipality(name,lat,lng);
+  if(!res.city){
+   console.warn("Could not resolve municipality",{name,count,lat,lng});
+   return;
+  }
+  const city=res.city;
+  municipalityTotals[city]+=count;
+
+  districtCounts[name]={count,lat,long:lng};
+  districtNameLookup[districtLookupKey(name)]={name,city,count};
+
+  municipalityIncidentRows[city].push({
+   name,count,lat,lng,city,method:res.method
   });
-  CITIES.forEach(city=>{const arr=municipalityIncidentRows[city];arr.forEach((row,index)=>{if(!Number.isFinite(row.lat)||!Number.isFinite(row.lng)){const c=municipalityCenters[city];if(c){const angle=(index/Math.max(arr.length,1))*Math.PI*2;row.lat=c.lat+Math.sin(angle)*.008;row.lng=c.long+Math.cos(angle)*.008;}}});});
-  Object.keys(districtLayers).forEach(key=>{const layer=districtLayers[key];if(!layer)return;layer.setStyle(districtBaseStyle());});
-  drillLevel=0;selectedMunicipality=null;selectedCluster=null;currentClusters=[];renderMunicipalityOverview();scheduleRefresh();
+ });
+
+ /* Remove duplicate district rows while summing counts. */
+ CITIES.forEach(city=>{
+  const mapRows=new Map();
+  (municipalityIncidentRows[city]||[]).forEach(r=>{
+   const key=districtLookupKey(r.name);
+   if(!mapRows.has(key)){
+    mapRows.set(key,{...r});
+   }else{
+    const old=mapRows.get(key);
+    old.count+=r.count;
+    if(!Number.isFinite(old.lat)&&Number.isFinite(r.lat))old.lat=r.lat;
+    if(!Number.isFinite(old.lng)&&Number.isFinite(r.lng))old.lng=r.lng;
+   }
+  });
+  municipalityIncidentRows[city]=Array.from(mapRows.values());
+ });
+
+ /* District GeoJSON is never visible here. It is styled only when
+    the user reaches Level 3 through the 5-area drill-down. */
+ updateMunicipalityStyles();
+
+ drillLevel=0;selectedMunicipality=null;selectedArea=null;currentAreas=[];
+ if(mapReady)showMunicipalityOverview();
+ scheduleRefresh();
 }
-function scheduleRefresh(){if(refreshTimer)clearTimeout(refreshTimer);refreshTimer=setTimeout(()=>{refreshTimer=null;refreshMap()},100)}
-function refreshMap(){if(drillLevel===0)renderMunicipalityOverview()}
+
+function scheduleRefresh(){
+ if(refreshTimer)clearTimeout(refreshTimer);
+ refreshTimer=setTimeout(()=>{refreshTimer=null;refreshMap();},100);
+}
+function refreshMap(){
+ if(drillLevel===0)showMunicipalityOverview();
+}
 
 /* =========================================================
-   RECEIVE GRAFANA DATA
+   RECEIVE GRAFANA MESSAGE
    ========================================================= */
-window.addEventListener('message',event=>{if(event.data?.type!=='incidentData')return;const rows=event.data.data||[];console.log('Received incident data:',rows);if(!mapReady){pendingIncidentData=rows;return}applyIncidentData(rows)});
+window.addEventListener("message",event=>{
+ if(event.data?.type!=="incidentData")return;
+ const rows=event.data.data||[];
+ console.log("Received incident data:",rows);
+ if(!mapReady){pendingIncidentData=rows;return;}
+ applyIncidentData(rows);
+});
 </script>
 </body>
 </html>
