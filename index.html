@@ -2,63 +2,785 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Municipality Incident Heat Map</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+  <link rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
   <style>
-    html,body,#map{height:100%;margin:0;font-family:Arial,sans-serif} #map{background:#dcecf3}
-    .panel,.legend{background:rgba(255,255,255,.94);padding:9px 12px;border-radius:8px;box-shadow:0 2px 9px #0004;border:1px solid #475569}
-    #title{position:absolute;z-index:1000;top:10px;left:50%;transform:translateX(-50%);font-weight:700;text-align:center}.small{font-size:12px;font-weight:400;margin-top:3px}
-    #back{display:none;position:absolute;z-index:1000;top:10px;left:10px;border:1px solid #334155;border-radius:7px;background:white;padding:8px 11px;font-weight:700;cursor:pointer}
-    .legend{line-height:22px;font-size:12px}.dot{display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:6px;vertical-align:middle}.tip{font-weight:600}
+    html,body,#map{
+      height:100%;
+      margin:0;
+      font-family:Arial,sans-serif;
+    }
+
+    #map{background:#dcecf3}
+
+    .panel,.legend{
+      background:rgba(255,255,255,.94);
+      padding:9px 12px;
+      border-radius:8px;
+      box-shadow:0 2px 9px #0004;
+      border:1px solid #475569;
+    }
+
+    #title{
+      position:absolute;
+      z-index:1000;
+      top:10px;
+      left:50%;
+      transform:translateX(-50%);
+      font-weight:700;
+      text-align:center;
+    }
+
+    .small{
+      font-size:12px;
+      font-weight:400;
+      margin-top:3px;
+    }
+
+    #back{
+      display:none;
+      position:absolute;
+      z-index:1000;
+      top:10px;
+      left:10px;
+      border:1px solid #334155;
+      border-radius:7px;
+      background:white;
+      padding:8px 11px;
+      font-weight:700;
+      cursor:pointer;
+    }
+
+    #filters{
+      position:absolute;
+      z-index:1000;
+      right:10px;
+      top:10px;
+      width:185px;
+      max-height:310px;
+      overflow:auto;
+      font-size:12px;
+    }
+
+    .filter-title{
+      font-weight:700;
+      margin-bottom:6px;
+    }
+
+    .filter-row{
+      display:block;
+      padding:3px 0;
+      cursor:pointer;
+    }
+
+    .filter-row input{
+      vertical-align:middle;
+      margin-right:6px;
+    }
+
+    #total-incidents{
+      position:absolute;
+      z-index:1000;
+      bottom:0;
+      left:0;
+      right:0;
+      padding:6px 14px;
+      background:rgba(15,23,42,.88);
+      color:#fff;
+      text-align:center;
+      font-size:14px;
+      font-weight:700;
+      letter-spacing:.1px;
+      pointer-events:none;
+    }
+
+    .legend{
+      line-height:22px;
+      font-size:12px;
+    }
+
+    .dot{
+      display:inline-block;
+      width:14px;
+      height:14px;
+      border-radius:50%;
+      margin-right:6px;
+      vertical-align:middle;
+    }
+
+    .tip{font-weight:600}
   </style>
 </head>
+
 <body>
   <div id="map"></div>
-  <div id="title" class="panel">Municipality Incident Heat Map<div id="status" class="small">Loading boundaries…</div></div>
+
+  <div id="title" class="panel">
+    Municipality Incident Heat Map
+    <div id="status" class="small">Loading boundaries…</div>
+  </div>
+
   <button id="back">← Municipalities</button>
+  <div id="filters" class="panel"></div>
+  <div id="total-incidents">Total Incidents: 0</div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js"></script>
+
   <script>
-  /* Put these four GeoJSON files in the SAME folder as this HTML. */
-  const FILES={municipalities:'./municipality.geojson',Dammam:'./dammam.geojson',Dhahran:'./dhahran.geojson',Khobar:'./khobar.geojson'};
-  const CITIES=['Dammam','Dhahran','Khobar'];
-  const COLORS={low:'#22a447',medium:'#f4c430',high:'#df3030'};
-  const map=L.map('map').setView([26.4,50.1],10);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
-  const boundary={}, districts={}, totals={}, rowsByCity={}; let view='municipalities', selectedCity=null, selectedArea=null, heatLayers=[], areaLayers=[], districtLayers=[];
-  const status=document.querySelector('#status'), back=document.querySelector('#back');
-  function number(x){x=Number(x);return Number.isFinite(x)?x:0}
-  function clean(x){return String(x??'').trim().toLowerCase().replace(/[\u064B-\u065F\u0670]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/\s+/g,' ')}
-  function nameOf(f){return f.properties?.REMARKS||f.properties?.NameEn||f.properties?.NAME||f.properties?.name||''}
-  function districtName(f){return f.properties?.NAME||f.properties?.NameEn||f.properties?.name||f.properties?.REMARKS||''}
-  function cityForName(name){const n=clean(name);if(['dammam','الدمام'].includes(n))return'Dammam';if(['dhahran','الظهران'].includes(n))return'Dhahran';if(['khobar','al khobar','الخبر'].includes(n))return'Khobar';return null}
-  function risk(value,values){const a=values.filter(x=>x>0).sort((x,y)=>x-y);if(!a.length||value<=0)return'low';const q1=a[Math.floor((a.length-1)/3)],q2=a[Math.floor(2*(a.length-1)/3)];return value>q2?'high':value>q1?'medium':'low'}
-  function clear(list){list.forEach(x=>map.removeLayer(x));list.length=0}
-  function setBack(label){back.style.display=view==='municipalities'?'none':'block';back.textContent=label}
-  function allBounds(){return L.featureGroup(Object.values(boundary)).getBounds()}
-  function heat(city,features,rows,opacity=.68){
-    const good=rows.filter(r=>Number.isFinite(r.lat)&&Number.isFinite(r.lng)&&r.count>0);if(!good.length||!features.length)return;
-    const box=turf.bbox(turf.featureCollection(features)), W=300,H=300,canvas=document.createElement('canvas');canvas.width=W;canvas.height=H;const ctx=canvas.getContext('2d');
-    const lngSpan=Math.max(box[2]-box[0],.0001),latSpan=Math.max(box[3]-box[1],.0001), max=Math.max(...good.map(r=>r.count));
-    good.forEach(r=>{const x=(r.lng-box[0])/lngSpan*W,y=(box[3]-r.lat)/latSpan*H,rad=40+80*Math.sqrt(r.count/max);const g=ctx.createRadialGradient(x,y,0,x,y,rad);g.addColorStop(0,'rgba(225,30,30,.9)');g.addColorStop(.38,'rgba(250,205,20,.62)');g.addColorStop(1,'rgba(30,165,70,0)');ctx.fillStyle=g;ctx.fillRect(x-rad,y-rad,rad*2,rad*2)});
-    const overlay=L.imageOverlay(canvas.toDataURL(),[[box[1],box[0]],[box[3],box[2]]],{opacity,interactive:false}).addTo(map);heatLayers.push(overlay);
-  }
-  function overview(){view='municipalities';selectedCity=null;clear(heatLayers);clear(areaLayers);clear(districtLayers);const values=CITIES.map(c=>totals[c]||0);CITIES.forEach(c=>{const color=COLORS[risk(totals[c]||0,values)];boundary[c].setStyle({color:'#fff',weight:2,fillColor:color,fillOpacity:.55});boundary[c].off();boundary[c].on('click',()=>fiveAreas(c));boundary[c].bindTooltip('<div class="tip">'+c+'</div>Incidents: '+(totals[c]||0).toLocaleString()+'<br>Click to view 5 areas',{sticky:true});heat(c,boundary[c].toGeoJSON().features,rowsByCity[c]||[])});map.fitBounds(allBounds(),{padding:[35,35]});status.textContent='Green: low • Yellow: medium • Red: high — click a municipality';setBack()}
-  function fiveAreas(city){view='areas';selectedCity=city;clear(heatLayers);clear(areaLayers);clear(districtLayers);CITIES.forEach(c=>boundary[c].setStyle({color:c===city?'#111827':'#94a3b8',weight:c===city?3:1,fillOpacity:0}));
-    const rows=(rowsByCity[city]||[]).filter(r=>Number.isFinite(r.lat)&&Number.isFinite(r.lng));const b=boundary[city].getBounds(), seeds=[];
-    for(let i=0;i<5;i++){const r=rows[i]||{lat:b.getSouth()+(i+1)*(b.getNorth()-b.getSouth())/6,lng:b.getWest()+(i+1)*(b.getEast()-b.getWest())/6};seeds.push(r)}
-    const groups=seeds.map(()=>[]);rows.forEach(r=>{let best=0,dist=Infinity;seeds.forEach((s,i)=>{const d=(r.lat-s.lat)**2+(r.lng-s.lng)**2;if(d<dist){dist=d;best=i}});groups[best].push(r)});
-    const pts=turf.featureCollection(seeds.map((s,i)=>turf.point([s.lng,s.lat],{i})));let cells=[];try{cells=turf.voronoi(pts,{bbox:[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()]}).features}catch(e){}
-    cells.forEach((cell,i)=>{if(!cell)return;let clipped;try{clipped=turf.intersect(turf.featureCollection([cell,boundary[city].toGeoJSON()]));}catch(e){clipped=cell}if(!clipped)return;const total=groups[i].reduce((s,r)=>s+r.count,0),layer=L.geoJSON(clipped,{style:{color:'#fff',weight:2,fillColor:['#7b2cbf','#1d8a9b','#f4b400','#e7472d','#277344'][i],fillOpacity:.38}}).addTo(map);layer.bindTooltip('<b>Area '+(i+1)+'</b><br>Incidents: '+total.toLocaleString()+'<br>Click for districts',{sticky:true});layer.on('click',()=>districtView(city,i,groups[i]));areaLayers.push(layer)});
-    map.fitBounds(b,{padding:[45,45]});status.textContent=city+' — 5 geographic areas. Click an area to view its districts.';setBack('← Municipalities')
-  }
-  function districtView(city,area,group){view='districts';selectedArea=area;clear(areaLayers);clear(heatLayers);clear(districtLayers);const keys=new Set(group.map(r=>clean(r.name))), list=Object.values(districts[city]);const vals=list.map(d=>d.count);list.forEach(d=>{if(keys.size&& !keys.has(clean(d.name)))return;const layer=L.geoJSON(d.feature,{style:{color:'#fff',weight:1.2,fillColor:COLORS[risk(d.count,vals)],fillOpacity:.7}}).addTo(map);layer.bindTooltip('<b>'+d.name+'</b><br>Incidents: '+d.count.toLocaleString(),{sticky:true});districtLayers.push(layer)});heat(city,boundary[city].toGeoJSON().features,group,.48);if(districtLayers.length)map.fitBounds(L.featureGroup(districtLayers).getBounds(),{padding:[45,45]});status.textContent=city+' — Area '+(area+1)+' district heatmap';setBack('← 5 Areas')}
-  back.onclick=()=>view==='districts'?fiveAreas(selectedCity):overview();
-  const legend=L.control({position:'bottomleft'});legend.onAdd=()=>{const d=L.DomUtil.create('div','legend');d.innerHTML='<b>Incident risk</b><br><span class="dot" style="background:#22a447"></span>Low<br><span class="dot" style="background:#f4c430"></span>Medium<br><span class="dot" style="background:#df3030"></span>High';return d};legend.addTo(map);
-  function setData(rows){CITIES.forEach(c=>{totals[c]=0;rowsByCity[c]=[];Object.values(districts[c]||{}).forEach(d=>d.count=0)});rows.forEach(r=>{const city=cityForName(r.municipality||r.city)||Object.entries(districts).find(([,ds])=>ds[clean(r.state||r.name||r.district)])?.[0];if(!city)return;const item={name:r.state||r.name||r.district||'',count:number(r.count),lat:Number(r.lat??r.latitude),lng:Number(r.long??r.lng??r.longitude)};totals[city]+=item.count;rowsByCity[city].push(item);const d=districts[city][clean(item.name)];if(d)d.count+=item.count});overview()}
-  window.addEventListener('message',e=>{if(e.data?.type==='incidentData')setData(Array.isArray(e.data.data)?e.data.data:[])});
-  Promise.all([fetch(FILES.municipalities).then(r=>r.json()),...CITIES.map(c=>fetch(FILES[c]).then(r=>r.json()))]).then(([municipalities,...cityFiles])=>{municipalities.features.forEach(f=>{const c=cityForName(nameOf(f));if(c)boundary[c]=L.geoJSON(f).addTo(map)});cityFiles.forEach((geo,i)=>{const city=CITIES[i];districts[city]={};geo.features.forEach(f=>{const n=districtName(f);if(n)districts[city][clean(n)]={name:n,feature:f,count:0}})});setData([])}).catch(err=>{console.error(err);status.textContent='Missing GeoJSON files. Put municipality.geojson, dammam.geojson, dhahran.geojson and khobar.geojson beside this HTML.'});
+    const FILES = {
+      municipalities: "./municipality.geojson",
+      Dammam: "./dammam.geojson",
+      Dhahran: "./dhahran.geojson",
+      Khobar: "./khobar.geojson"
+    };
+
+    const CITIES = ["Dammam", "Dhahran", "Khobar"];
+
+    const COLORS = {
+      low: "#22a447",
+      medium: "#f4c430",
+      high: "#df3030"
+    };
+
+    const map = L.map("map").setView([26.4, 50.1], 10);
+
+    L.tileLayer(
+      "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+      {
+        maxZoom: 19,
+        attribution: "© OpenStreetMap contributors © CARTO"
+      }
+    ).addTo(map);
+
+    const boundary = {};
+    const districts = {};
+    const totals = {};
+    const rowsByCity = {};
+
+    let view = "municipalities";
+    let selectedCity = null;
+    let selectedArea = null;
+
+    let heatLayers = [];
+    let areaLayers = [];
+    let districtLayers = [];
+    let districtDisplay = [];
+
+    const selectedCities = new Set(CITIES);
+    const selectedDistricts = new Set();
+
+    const status = document.querySelector("#status");
+    const back = document.querySelector("#back");
+    const filters = document.querySelector("#filters");
+    const totalLabel = document.querySelector("#total-incidents");
+
+    function number(value) {
+      value = Number(value);
+      return Number.isFinite(value) ? value : 0;
+    }
+
+    function clean(value) {
+      return String(value ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/[\u064B-\u065F\u0670]/g, "")
+        .replace(/[أإآ]/g, "ا")
+        .replace(/ى/g, "ي")
+        .replace(/ة/g, "ه")
+        .replace(/\s+/g, " ");
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      }[char]));
+    }
+
+    function nameOf(feature) {
+      return feature.properties?.REMARKS ||
+        feature.properties?.NameEn ||
+        feature.properties?.NAME ||
+        feature.properties?.name || "";
+    }
+
+    function districtName(feature) {
+      return feature.properties?.NAME ||
+        feature.properties?.NameEn ||
+        feature.properties?.name ||
+        feature.properties?.REMARKS || "";
+    }
+
+    function cityForName(name) {
+      const value = clean(name);
+
+      if (["dammam", "الدمام"].includes(value)) return "Dammam";
+      if (["dhahran", "الظهران"].includes(value)) return "Dhahran";
+      if (["khobar", "al khobar", "الخبر"].includes(value)) return "Khobar";
+
+      return null;
+    }
+
+    function risk(value, allValues) {
+      const values = allValues
+        .filter(x => x > 0)
+        .sort((a, b) => a - b);
+
+      if (!values.length || value <= 0) return "low";
+
+      const lowLimit = values[Math.floor((values.length - 1) / 3)];
+      const highLimit = values[Math.floor(2 * (values.length - 1) / 3)];
+
+      if (value > highLimit) return "high";
+      if (value > lowLimit) return "medium";
+
+      return "low";
+    }
+
+    function clear(layers) {
+      layers.forEach(layer => map.removeLayer(layer));
+      layers.length = 0;
+    }
+
+    function setBack(label) {
+      back.style.display = view === "municipalities" ? "none" : "block";
+      back.textContent = label || "← Municipalities";
+    }
+
+    function renderFilters() {
+      if (view === "municipalities") {
+        filters.innerHTML =
+          `<div class="filter-title">Municipalities</div>` +
+          CITIES.map(city => `
+            <label class="filter-row">
+              <input type="checkbox"
+                value="${city}"
+                ${selectedCities.has(city) ? "checked" : ""}>
+              ${city}
+            </label>
+          `).join("");
+
+        filters.querySelectorAll("input").forEach(input => {
+          input.onchange = () => {
+            if (input.checked) selectedCities.add(input.value);
+            else selectedCities.delete(input.value);
+
+            overview();
+          };
+        });
+      }
+
+      else if (view === "districts") {
+        filters.innerHTML =
+          `<div class="filter-title">
+            Districts — Area ${selectedArea + 1}
+          </div>` +
+          districtDisplay.map(district => `
+            <label class="filter-row">
+              <input type="checkbox"
+                value="${escapeHtml(district.name)}"
+                ${selectedDistricts.has(district.name) ? "checked" : ""}>
+              ${escapeHtml(district.name)}
+            </label>
+          `).join("");
+
+        filters.querySelectorAll("input").forEach(input => {
+          input.onchange = () => {
+            const district = districtDisplay.find(
+              item => item.name === input.value
+            );
+
+            if (!district) return;
+
+            if (input.checked) {
+              selectedDistricts.add(district.name);
+              district.layer.addTo(map);
+            } else {
+              selectedDistricts.delete(district.name);
+              map.removeLayer(district.layer);
+            }
+          };
+        });
+      }
+
+      else {
+        filters.innerHTML = `
+          <div class="filter-title">
+            Municipality: ${selectedCity}
+          </div>
+          <div class="small">
+            Click an area to select or unselect districts.
+          </div>
+        `;
+      }
+    }
+
+    function heat(features, rows, opacity = .28) {
+      const validRows = rows.filter(row =>
+        Number.isFinite(row.lat) &&
+        Number.isFinite(row.lng) &&
+        row.count > 0
+      );
+
+      if (!validRows.length || !features.length) return;
+
+      const bbox = turf.bbox(turf.featureCollection(features));
+
+      const minLng = bbox[0];
+      const minLat = bbox[1];
+      const maxLng = bbox[2];
+      const maxLat = bbox[3];
+
+      const width = 300;
+      const height = 300;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+
+      const context = canvas.getContext("2d");
+
+      const lngSpan = Math.max(maxLng - minLng, .0001);
+      const latSpan = Math.max(maxLat - minLat, .0001);
+
+      const maxCount = Math.max(...validRows.map(row => row.count));
+
+      validRows.forEach(row => {
+        const x = ((row.lng - minLng) / lngSpan) * width;
+        const y = ((maxLat - row.lat) / latSpan) * height;
+
+        const radius = 16 + 34 * Math.sqrt(row.count / maxCount);
+
+        const gradient = context.createRadialGradient(
+          x, y, 0,
+          x, y, radius
+        );
+
+        gradient.addColorStop(0, "rgba(220,38,38,.70)");
+        gradient.addColorStop(.32, "rgba(245,158,11,.43)");
+        gradient.addColorStop(.68, "rgba(250,204,21,.16)");
+        gradient.addColorStop(1, "rgba(250,204,21,0)");
+
+        context.fillStyle = gradient;
+
+        context.fillRect(
+          x - radius,
+          y - radius,
+          radius * 2,
+          radius * 2
+        );
+      });
+
+      const overlay = L.imageOverlay(
+        canvas.toDataURL(),
+        [[minLat, minLng], [maxLat, maxLng]],
+        { opacity, interactive: false }
+      ).addTo(map);
+
+      heatLayers.push(overlay);
+    }
+
+    function overview() {
+      view = "municipalities";
+      selectedCity = null;
+
+      clear(heatLayers);
+      clear(areaLayers);
+      clear(districtLayers);
+
+      districtDisplay = [];
+
+      const values = CITIES.map(city => totals[city] || 0);
+      const visibleLayers = [];
+
+      CITIES.forEach(city => {
+        if (!boundary[city]) return;
+
+        if (!selectedCities.has(city)) {
+          map.removeLayer(boundary[city]);
+          return;
+        }
+
+        const color = COLORS[risk(totals[city] || 0, values)];
+
+        boundary[city]
+          .addTo(map)
+          .setStyle({
+            color: "#ffffff",
+            weight: 2,
+            fillColor: color,
+            fillOpacity: .48
+          });
+
+        boundary[city].off();
+
+        boundary[city].on("click", () => fiveAreas(city));
+
+        boundary[city].bindTooltip(
+          `<div class="tip">${city}</div>
+           Incidents: ${(totals[city] || 0).toLocaleString()}
+           <br>Click to view 5 areas`,
+          { sticky: true }
+        );
+
+        visibleLayers.push(boundary[city]);
+      });
+
+      const bounds = L.featureGroup(visibleLayers).getBounds();
+
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [35, 35] });
+      }
+
+      status.textContent =
+        "Green: low • Yellow: medium • Red: high — select municipalities at right";
+
+      setBack();
+      renderFilters();
+    }
+
+    function fiveAreas(city) {
+      view = "areas";
+      selectedCity = city;
+
+      clear(heatLayers);
+      clear(areaLayers);
+      clear(districtLayers);
+
+      CITIES.forEach(item => {
+        if (!boundary[item]) return;
+
+        boundary[item].setStyle({
+          color: item === city ? "#111827" : "#94a3b8",
+          weight: item === city ? 3 : 1,
+          fillOpacity: 0
+        });
+      });
+
+      const cityRows = (rowsByCity[city] || []).filter(row =>
+        Number.isFinite(row.lat) &&
+        Number.isFinite(row.lng)
+      );
+
+      const bounds = boundary[city].getBounds();
+      const seeds = [];
+
+      for (let i = 0; i < 5; i++) {
+        const row = cityRows[i] || {
+          lat: bounds.getSouth() +
+            (i + 1) * (bounds.getNorth() - bounds.getSouth()) / 6,
+
+          lng: bounds.getWest() +
+            (i + 1) * (bounds.getEast() - bounds.getWest()) / 6
+        };
+
+        seeds.push(row);
+      }
+
+      const groups = seeds.map(() => []);
+
+      cityRows.forEach(row => {
+        let closestIndex = 0;
+        let shortestDistance = Infinity;
+
+        seeds.forEach((seed, index) => {
+          const distance =
+            (row.lat - seed.lat) ** 2 +
+            (row.lng - seed.lng) ** 2;
+
+          if (distance < shortestDistance) {
+            shortestDistance = distance;
+            closestIndex = index;
+          }
+        });
+
+        groups[closestIndex].push(row);
+      });
+
+      const points = turf.featureCollection(
+        seeds.map((seed, index) =>
+          turf.point([seed.lng, seed.lat], { index })
+        )
+      );
+
+      let cells = [];
+
+      try {
+        cells = turf.voronoi(points, {
+          bbox: [
+            bounds.getWest(),
+            bounds.getSouth(),
+            bounds.getEast(),
+            bounds.getNorth()
+          ]
+        }).features;
+      } catch (error) {
+        console.error(error);
+      }
+
+      const areaColors = [
+        "#7b2cbf",
+        "#1d8a9b",
+        "#f4b400",
+        "#e7472d",
+        "#277344"
+      ];
+
+      cells.forEach((cell, index) => {
+        if (!cell) return;
+
+        let clippedCell;
+
+        try {
+          clippedCell = turf.intersect(
+            turf.featureCollection([
+              cell,
+              boundary[city].toGeoJSON()
+            ])
+          );
+        } catch {
+          clippedCell = cell;
+        }
+
+        if (!clippedCell) return;
+
+        const total = groups[index].reduce(
+          (sum, row) => sum + row.count,
+          0
+        );
+
+        const layer = L.geoJSON(clippedCell, {
+          style: {
+            color: "#ffffff",
+            weight: 2,
+            fillColor: areaColors[index],
+            fillOpacity: .38
+          }
+        }).addTo(map);
+
+        layer.bindTooltip(
+          `<b>Area ${index + 1}</b>
+           <br>Incidents: ${total.toLocaleString()}
+           <br>Click for districts`,
+          { sticky: true }
+        );
+
+        layer.on("click", () => {
+          districtView(city, index, groups[index]);
+        });
+
+        areaLayers.push(layer);
+      });
+
+      map.fitBounds(bounds, { padding: [45, 45] });
+
+      status.textContent =
+        `${city} — 5 geographic areas. Click an area to view its districts.`;
+
+      setBack("← Municipalities");
+      renderFilters();
+    }
+
+    function districtView(city, area, group) {
+      view = "districts";
+      selectedArea = area;
+
+      clear(areaLayers);
+      clear(heatLayers);
+      clear(districtLayers);
+
+      districtDisplay = [];
+
+      const names = new Set(group.map(row => clean(row.name)));
+      const districtList = Object.values(districts[city]);
+      const values = districtList.map(district => district.count);
+
+      districtList.forEach(district => {
+        if (names.size && !names.has(clean(district.name))) return;
+
+        const layer = L.geoJSON(district.feature, {
+          style: {
+            color: "#ffffff",
+            weight: 1.2,
+            fillColor: COLORS[risk(district.count, values)],
+            fillOpacity: .66
+          }
+        }).addTo(map);
+
+        layer.bindTooltip(
+          `<b>${district.name}</b>
+           <br>Incidents: ${district.count.toLocaleString()}`,
+          { sticky: true }
+        );
+
+        districtLayers.push(layer);
+
+        districtDisplay.push({
+          name: district.name,
+          layer
+        });
+      });
+
+      selectedDistricts.clear();
+
+      districtDisplay.forEach(district => {
+        selectedDistricts.add(district.name);
+      });
+
+      heat(
+        boundary[city].toGeoJSON().features,
+        group,
+        .28
+      );
+
+      if (districtLayers.length) {
+        map.fitBounds(
+          L.featureGroup(districtLayers).getBounds(),
+          { padding: [45, 45] }
+        );
+      }
+
+      status.textContent =
+        `${city} — Area ${area + 1} district heatmap`;
+
+      setBack("← 5 Areas");
+      renderFilters();
+    }
+
+    back.onclick = () => {
+      if (view === "districts") {
+        fiveAreas(selectedCity);
+      } else {
+        overview();
+      }
+    };
+
+    const legend = L.control({ position: "bottomleft" });
+
+    legend.onAdd = () => {
+      const element = L.DomUtil.create("div", "legend");
+
+      element.innerHTML = `
+        <b>Incident risk</b><br>
+        <span class="dot" style="background:#22a447"></span>Low<br>
+        <span class="dot" style="background:#f4c430"></span>Medium<br>
+        <span class="dot" style="background:#df3030"></span>High
+      `;
+
+      return element;
+    };
+
+    legend.addTo(map);
+
+    function setData(rows) {
+      CITIES.forEach(city => {
+        totals[city] = 0;
+        rowsByCity[city] = [];
+
+        Object.values(districts[city] || {}).forEach(district => {
+          district.count = 0;
+        });
+      });
+
+      rows.forEach(row => {
+        const districtValue =
+          row.state || row.name || row.district || "";
+
+        const city =
+          cityForName(row.municipality || row.city) ||
+          Object.entries(districts).find(([, list]) =>
+            list[clean(districtValue)]
+          )?.[0];
+
+        if (!city) return;
+
+        const item = {
+          name: districtValue,
+          count: number(row.count),
+          lat: Number(row.lat ?? row.latitude),
+          lng: Number(row.long ?? row.lng ?? row.longitude)
+        };
+
+        totals[city] += item.count;
+        rowsByCity[city].push(item);
+
+        const district = districts[city][clean(item.name)];
+
+        if (district) {
+          district.count += item.count;
+        }
+      });
+
+      const total = Object.values(totals).reduce(
+        (sum, value) => sum + value,
+        0
+      );
+
+      totalLabel.textContent =
+        `Total Incidents: ${total.toLocaleString()}`;
+
+      overview();
+    }
+
+    window.addEventListener("message", event => {
+      if (event.data?.type !== "incidentData") return;
+
+      setData(
+        Array.isArray(event.data.data)
+          ? event.data.data
+          : []
+      );
+    });
+
+    Promise.all([
+      fetch(FILES.municipalities).then(response => response.json()),
+      ...CITIES.map(city =>
+        fetch(FILES[city]).then(response => response.json())
+      )
+    ])
+      .then(([municipalities, ...cityFiles]) => {
+        municipalities.features.forEach(feature => {
+          const city = cityForName(nameOf(feature));
+
+          if (city) {
+            boundary[city] = L.geoJSON(feature).addTo(map);
+          }
+        });
+
+        cityFiles.forEach((geojson, index) => {
+          const city = CITIES[index];
+
+          districts[city] = {};
+
+          geojson.features.forEach(feature => {
+            const name = districtName(feature);
+
+            if (!name) return;
+
+            districts[city][clean(name)] = {
+              name,
+              feature,
+              count: 0
+            };
+          });
+        });
+
+        setData([]);
+      })
+      .catch(error => {
+        console.error(error);
+
+        status.textContent =
+          "Missing GeoJSON files. Put municipality.geojson, dammam.geojson, dhahran.geojson and khobar.geojson beside this HTML.";
+      });
   </script>
 </body>
 </html>
