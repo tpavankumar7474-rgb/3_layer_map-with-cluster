@@ -543,10 +543,10 @@ body {
    ========================================================= */
 
 const map = L.map("map", {
-
-    maxZoom: 18
-
-});
+    maxZoom: 19,
+    zoomControl: true,
+    preferCanvas: false
+}).setView([26.38, 50.10], 10);
 
 
 /* =========================================================
@@ -554,18 +554,19 @@ const map = L.map("map", {
    ========================================================= */
 
 const osm = L.tileLayer(
-
     "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-
     {
-
-        attribution:
-            "&copy; OpenStreetMap contributors",
-
+        attribution: "&copy; OpenStreetMap contributors",
         maxZoom: 19
-
     }
+);
 
+const satellite = L.tileLayer(
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    {
+        attribution: "Esri World Imagery",
+        maxZoom: 19
+    }
 ).addTo(map);
 
 
@@ -632,16 +633,8 @@ const incidentHeatLayer = L.heatLayer([], {
     radius: 70,
     blur: 55,
     maxZoom: 13,
-    minOpacity: 0.35,
-    gradient: {
-        0.20: "blue",
-        0.35: "cyan",
-        0.50: "lime",
-        0.70: "yellow",
-        0.85: "orange",
-        1.00: "red"
-    }
-}).addTo(map);
+    minOpacity: 0.0
+});
 
 const heatLabelLayer = L.layerGroup().addTo(map);
 
@@ -6266,7 +6259,7 @@ window.addEventListener(
    Level 2 = 3 actual-shape Groups inside municipality
    Level 3 = direct Districts inside selected Group
 
-   No Sub-Group level.
+   No District level.
    No artificial circles for geographic areas.
    ========================================================= */
 
@@ -6669,6 +6662,18 @@ window.addEventListener(
         {attribution:'Esri World Imagery',maxZoom:19}
     ).addTo(map);
 
+    L.control.layers(
+        {
+            "Satellite / Google Earth Style": satellite,
+            "OpenStreetMap": osm
+        },
+        null,
+        {
+            collapsed: false,
+            position: "topright"
+        }
+    ).addTo(map);
+
     // Put satellite below vector overlays.
     if(map.getPane('tilePane')) map.getPane('tilePane').style.zIndex=200;
 
@@ -6681,10 +6686,18 @@ window.addEventListener(
 
     setTimeout(()=>{
         wireBackButton();
-        if(typeof mapReady!=='undefined' && mapReady){
-            showMunicipalityOverview();
-        }
-    },1200);
+
+        /*
+           Always render Level 1.
+           Dummy/test counts are already present in the data fallback,
+           so the map is visible even before Grafana sends live rows.
+        */
+        level1();
+
+        setTimeout(function(){
+            map.invalidateSize(true);
+        },250);
+    },700);
 
     // Keep our level functions after any source redraw.
     setTimeout(wireBackButton,1800);
@@ -6822,18 +6835,18 @@ window.addEventListener(
         Dammam: {
             light:'#fca5a5',
             mid:'#ef4444',
-            dark:'#991b1b',
+            dark:'#b91c1c',
             border:'#ffffff'
         },
         Khobar: {
-            light:'#fde68a',
+            light:'#fef3c7',
             mid:'#facc15',
-            dark:'#a16207',
+            dark:'#ca8a04',
             border:'#ffffff'
         },
         Dhahran: {
             light:'#bbf7d0',
-            mid:'#22c55e',
+            mid:'#4d963e',
             dark:'#166534',
             border:'#ffffff'
         }
@@ -6923,26 +6936,39 @@ window.addEventListener(
     function gradient(id,palette,intensity){
         const d=defs();
         if(!d) return false;
+
         const old=document.getElementById(id);
         if(old) old.remove();
 
-        const g=document.createElementNS('http://www.w3.org/2000/svg','radialGradient');
+        const g=document.createElementNS(
+            'http://www.w3.org/2000/svg',
+            'radialGradient'
+        );
+
         g.setAttribute('id',id);
         g.setAttribute('cx','50%');
         g.setAttribute('cy','50%');
-        g.setAttribute('r','76%');
+        g.setAttribute('r','82%');
 
         intensity=Math.max(0,Math.min(1,num(intensity)));
-        const core=Math.round(18+35*intensity);
-        const m1=Math.min(70,core+12);
-        const m2=Math.min(86,m1+12);
+
+        /*
+          Continuous weather-style gradient:
+          dark centre -> dark-mid -> mid -> light-mid -> light edge.
+        */
+        const core=Math.round(16 + 30*intensity);
+        const s2=Math.min(58,core+12);
+        const s3=Math.min(74,s2+10);
+        const s4=Math.min(88,s3+10);
 
         g.innerHTML=
-            '<stop offset="0%" stop-color="'+palette.dark+'" stop-opacity="0.96"></stop>'+
-            '<stop offset="'+core+'%" stop-color="'+palette.dark+'" stop-opacity="0.91"></stop>'+
-            '<stop offset="'+m1+'%" stop-color="'+palette.mid+'" stop-opacity="0.84"></stop>'+
-            '<stop offset="'+m2+'%" stop-color="'+palette.mid+'" stop-opacity="0.76"></stop>'+
+            '<stop offset="0%" stop-color="'+palette.dark+'" stop-opacity="0.97"></stop>'+
+            '<stop offset="'+core+'%" stop-color="'+palette.dark+'" stop-opacity="0.93"></stop>'+
+            '<stop offset="'+s2+'%" stop-color="'+palette.mid+'" stop-opacity="0.89"></stop>'+
+            '<stop offset="'+s3+'%" stop-color="'+palette.mid+'" stop-opacity="0.80"></stop>'+
+            '<stop offset="'+s4+'%" stop-color="'+palette.light+'" stop-opacity="0.73"></stop>'+
             '<stop offset="100%" stop-color="'+palette.light+'" stop-opacity="0.64"></stop>';
+
         d.appendChild(g);
         return true;
     }
@@ -6982,22 +7008,13 @@ window.addEventListener(
 
     function bindTooltip(layer,name,c,total,kind,cname){
         if(typeof districtTooltipHtml==='function' && kind==='district'){
-            const rr = (typeof cname === 'string') ? cname : 'District';
             layer.bindTooltip(
-                districtTooltipHtml(
-                    name,
-                    city,
-                    c,
-                    {level:rr}
-                ),
+                districtTooltipHtml(name,c,cname||'',{level:cname||'District',color:'#333'}),
                 {sticky:true,direction:'top',opacity:.95,className:'custom-tooltip'}
             );
         }else if(typeof municipalityTooltipHtml==='function'){
             layer.bindTooltip(
-                municipalityTooltipHtml(
-                    name,
-                    {level:kind,color:'#333'}
-                ),
+                municipalityTooltipHtml(name,{level:kind,color:'#333',count:total}),
                 {sticky:true,direction:'top',opacity:.95,className:'custom-tooltip'}
             );
         }else{
@@ -7265,10 +7282,65 @@ window.addEventListener(
         if(tries>80) clearInterval(timer);
     },250);
 
-    window.__threeLevelMap={level1,level2,level3};
+    /*
+       HARD 3-LEVEL API
+       -----------------
+       Level 1 = Municipalities
+       Level 2 = Groups
+       Level 3 = Direct Districts
+
+       Clicking a group goes directly to districts.
+       No sub-group function is exposed.
+    */
+    window.showMunicipalityOverview = level1;
+    window.showMunicipality = level2;
+    window.showSecondLevel = level3;
+    window.handleBack = function(){
+        if(level === 2){
+            level2(city);
+        } else if(level === 1){
+            level1();
+        } else {
+            level1();
+        }
+    };
+
+    window.__threeLevelMap={
+        level1,
+        level2,
+        level3
+    };
 
 })();
 </script>
 
 </body>
 </html>
+
+<style>
+.final-clean-number-label,
+.final-clean-number-label * {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+.final-clean-group-number,
+.final-clean-number {
+    background: transparent !important;
+    color: #ffffff !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    font-weight: 900 !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    text-shadow:
+        0 2px 4px rgba(0,0,0,.98),
+        0 0 6px rgba(0,0,0,.98) !important;
+}
+.final-clean-group-number {
+    font-size: 20px !important;
+}
+.final-clean-number {
+    font-size: 16px !important;
+}
+</style>
