@@ -629,17 +629,17 @@ const municipalityTotals = {
    ========================================================= */
 
 const incidentHeatLayer = L.heatLayer([], {
-    radius: 52,
-    blur: 38,
-    maxZoom: 16,
-    minOpacity: 0.24,
+    radius: 70,
+    blur: 55,
+    maxZoom: 13,
+    minOpacity: 0.35,
     gradient: {
-        0.00: "#1d4ed8",
-        0.30: "#06b6d4",
-        0.50: "#22c55e",
-        0.68: "#facc15",
-        0.84: "#f97316",
-        1.00: "#dc2626"
+        0.20: "blue",
+        0.35: "cyan",
+        0.50: "lime",
+        0.70: "yellow",
+        0.85: "orange",
+        1.00: "red"
     }
 }).addTo(map);
 
@@ -5395,11 +5395,13 @@ function clearHeatVisuals() {
 
 
 function getHeatWeight(count, stats) {
-    if (!Number(count) || !stats || !stats.max) return 0;
-    if (stats.max === stats.min) return 0.60;
-    if (count <= stats.lowLimit) return 0.25;  // green
-    if (count <= stats.highLimit) return 0.60; // yellow
-    return 1.00;                                // red
+    count = Number(count || 0);
+
+    if (!count || !stats || !stats.max) return 0;
+
+    // Use the actual count as the heat intensity, just like
+    // the Folium HeatMap in the Python version.
+    return count;
 }
 
 
@@ -5440,13 +5442,16 @@ function renderHeatLevel(items, labelFor, onClickFor, radius) {
 
     incidentHeatLayer.setOptions({
         radius: radius,
-        blur: Math.round(radius * 0.72),
-        minOpacity: 0.28,
-        maxZoom: 16,
+        blur: Math.round(radius * 0.7857),
+        minOpacity: 0.35,
+        maxZoom: 13,
         gradient: {
-            0.00: "#16a34a",
-            0.50: "#facc15",
-            1.00: "#dc2626"
+            0.20: "blue",
+            0.35: "cyan",
+            0.50: "lime",
+            0.70: "yellow",
+            0.85: "orange",
+            1.00: "red"
         }
     });
 
