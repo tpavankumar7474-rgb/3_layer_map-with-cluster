@@ -3396,6 +3396,13 @@ function createClusterMarkers(
    SHOW MUNICIPALITY
    ========================================================= */
 
+function hideOverviewDistrictLabels() {
+    if (window.overviewDistrictLabels) {
+        map.removeLayer(window.overviewDistrictLabels);
+        window.overviewDistrictLabels = null;
+    }
+}
+
 function showMunicipality(city) {
 
     selectedMunicipality =
@@ -3408,6 +3415,8 @@ function showMunicipality(city) {
         null;
 
     drillLevel = 1;
+
+    hideOverviewDistrictLabels();
 
 
     clearBubbleLayer();
@@ -3512,6 +3521,8 @@ function showSecondLevel(
         null;
 
     drillLevel = 2;
+
+    hideOverviewDistrictLabels();
 
 
     clearBubbleLayer();
@@ -3629,8 +3640,11 @@ function showDistrictLevel(
 
     drillLevel = 3;
 
+    hideOverviewDistrictLabels();
+
 
     clearBubbleLayer();
+    clearHeatVisuals();
 
 
     const rows =
@@ -4190,82 +4204,204 @@ function updateBackButton() {
 function showMunicipalityOverview() {
 
     drillLevel = 0;
-
-    selectedMunicipality =
-        null;
-
-    selectedCluster =
-        null;
-
-    selectedSubCluster =
-        null;
-
+    selectedMunicipality = null;
+    selectedCluster = null;
+    selectedSubCluster = null;
     currentClusters = [];
 
+    clearBubbleLayer();
+    clearHeatVisuals();
 
-    createMunicipalityMarkers();
-
-
-    const boundaries = [
-
-        municipalityBoundaryLayers.Dammam,
-
-        municipalityBoundaryLayers.Dhahran,
-
-        municipalityBoundaryLayers.Khobar
-
-    ].filter(Boolean);
-
-
-    if (boundaries.length) {
-
-        const group =
-            L.featureGroup(
-
-                boundaries
-
-            );
-
-
-        if (
-
-            group.getBounds().isValid()
-
-        ) {
-
-            map.fitBounds(
-
-                group.getBounds(),
-
-                {
-
-                    padding:
-                        [30, 30]
-
-                }
-
-            );
-
-        }
-
+    if (window.overviewDistrictLabels) {
+        map.removeLayer(window.overviewDistrictLabels);
     }
 
+    refreshMunicipalityHeatFills();
+
+    window.overviewDistrictLabels =
+        createOverviewDistrictLabels();
+
+    window.overviewDistrictLabels.addTo(map);
+
+    CITIES.forEach(city => {
+        const boundary = municipalityBoundaryLayers[city];
+        if (!boundary) return;
+
+        boundary.off("click");
+        boundary.on("click", () => showMunicipality(city));
+    });
+
+    const boundaries = CITIES
+        .map(city => municipalityBoundaryLayers[city])
+        .filter(Boolean);
+
+    if (boundaries.length) {
+        const group = L.featureGroup(boundaries);
+        if (group.getBounds().isValid()) {
+            map.fitBounds(group.getBounds(), {padding:[30,30]});
+        }
+    }
 
     updateMapInfo(
-
-        "🟢 Low &nbsp;&nbsp; 🟡 Medium &nbsp;&nbsp; 🔴 High"
-
+        "Municipality heat — Dammam RED • Khobar YELLOW • Dhahran GREEN"
     );
 
-
     updateBackButton();
-
 }
 
 
 /* =========================================================
    MUNICIPALITY BOUNDARY STYLE
    ========================================================= */
+
+
+/* =========================================================
+   COUNT-BASED MUNICIPALITY HEAT FILL
+   Dammam = red family
+   Khobar  = yellow family
+   Dhahran = green family
+   ========================================================= */
+
+function municipalityHue(city) {
+    if (city === "Dammam") return {
+        light: "#fecaca", mid: "#ef4444", dark: "#991b1b"
+    };
+    if (city === "Khobar") return {
+        light: "#fef08a", mid: "#facc15", dark: "#a16207"
+    };
+    if (city === "Dhahran") return {
+        light: "#bbf7d0", mid: "#22c55e", dark: "#166534"
+    };
+    return {light:"#e5e7eb", mid:"#9ca3af", dark:"#374151"};
+}
+
+function installMunicipalityGradients() {
+    const svg = map.getPanes().overlayPane?.querySelector("svg");
+    if (!svg) return;
+
+    let defs = svg.querySelector("#municipality-gradient-defs");
+    if (!defs) {
+        defs = document.createElementNS("http://www.w3.org/2000/svg","defs");
+        defs.id = "municipality-gradient-defs";
+        svg.insertBefore(defs, svg.firstChild);
+    }
+
+    CITIES.forEach(city => {
+        const id = `${city}-municipality-gradient`;
+        if (defs.querySelector(`#${id}`)) return;
+
+        const p = municipalityHue(city);
+        const g = document.createElementNS("http://www.w3.org/2000/svg","radialGradient");
+        g.id=id; g.cx="50%"; g.cy="50%"; g.r="75%";
+
+        [["0%",p.dark],["38%",p.mid],["100%",p.light]].forEach(([o,c])=>{
+            const s=document.createElementNS("http://www.w3.org/2000/svg","stop");
+            s.setAttribute("offset",o);
+            s.setAttribute("stop-color",c);
+            g.appendChild(s);
+        });
+        defs.appendChild(g);
+    });
+}
+
+function refreshMunicipalityHeatFills() {
+    installMunicipalityGradients();
+
+    const values = CITIES.map(c => Number(municipalityTotals[c] || 0));
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+
+    CITIES.forEach(city => {
+        const layer = municipalityBoundaryLayers[city];
+        if (!layer) return;
+
+        const palette = municipalityHue(city);
+
+        layer.setStyle({
+            color: palette.dark,
+            weight: 2,
+            opacity: 0.95,
+            fillColor: palette.mid,
+            fillOpacity: 0.72
+        });
+
+        layer.eachLayer(child => {
+            if (!child._path) return;
+            child._path.style.fill = `url(#${city}-municipality-gradient)`;
+            child._path.style.fillOpacity = "0.82";
+            child._path.style.stroke = palette.dark;
+            child._path.style.strokeWidth = "2";
+        });
+    });
+}
+
+/* =========================================================
+   DISTRICT COUNTS AT THEIR REAL COORDINATES
+   Used on municipality overview instead of municipality
+   total bubbles in the center.
+   ========================================================= */
+
+function createOverviewDistrictLabels() {
+    const group = L.layerGroup();
+
+    CITIES.forEach(city => {
+        const rows = prepareRows(
+            municipalityIncidentRows[city] || [],
+            city
+        );
+
+        rows.forEach(row => {
+            if (!Number.isFinite(row.lat) || !Number.isFinite(row.lng)) return;
+            const count = Number(row.count || 0);
+            if (count <= 0) return;
+
+            const icon = L.divIcon({
+                className: "heat-label-marker",
+                html: `
+                    <div class="heat-data-label">
+                        <b>${row.name || "District"}</b>
+                        <span>${count.toLocaleString()}</span>
+                    </div>
+                `,
+                iconSize: [108,38],
+                iconAnchor: [54,19]
+            });
+
+            const marker = L.marker([row.lat,row.lng], {
+                icon, zIndexOffset: 1800, interactive: true
+            });
+
+            marker.bindTooltip(
+                districtTooltipHtml(
+                    row.name || "District",
+                    city,
+                    count,
+                    getLayerRisk(count, calculateLayerRisk(rows))
+                ),
+                {
+                    sticky:true,
+                    direction:"top",
+                    opacity:0.95,
+                    className:"custom-tooltip"
+                }
+            );
+
+            marker.on("click", () => {
+                window.parent.postMessage({
+                    type:"mapClick",
+                    state:row.name,
+                    municipality:city,
+                    lat:row.lat,
+                    long:row.lng
+                },"*");
+            });
+
+            group.addLayer(marker);
+        });
+    });
+
+    return group;
+}
 
 function boundaryStyle() {
 
@@ -5010,6 +5146,11 @@ Promise.all([
         }
 
 
+        setTimeout(
+            refreshMunicipalityHeatFills,
+            100
+        );
+
         /* =================================================
            DISTRICT LAYERS
            ================================================= */
@@ -5399,9 +5540,9 @@ function getHeatWeight(count, stats) {
 
     if (!count || !stats || !stats.max) return 0;
 
-    // Use the actual count as the heat intensity, just like
-    // the Folium HeatMap in the Python version.
-    return count;
+    if (stats.max === stats.min) return 1;
+
+    return Math.max(0.08, count / stats.max);
 }
 
 
@@ -5446,12 +5587,13 @@ function renderHeatLevel(items, labelFor, onClickFor, radius) {
         minOpacity: 0.35,
         maxZoom: 13,
         gradient: {
-            0.20: "blue",
-            0.35: "cyan",
-            0.50: "lime",
-            0.70: "yellow",
-            0.85: "orange",
-            1.00: "red"
+            0.10: "#bbf7d0",
+            0.25: "#22c55e",
+            0.45: "#fef08a",
+            0.60: "#facc15",
+            0.78: "#fecaca",
+            0.90: "#ef4444",
+            1.00: "#991b1b"
         }
     });
 
