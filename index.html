@@ -474,6 +474,27 @@ body {
 
 }
 
+
+.heat-data-label {
+    min-width: 86px;
+    padding: 4px 6px;
+    border: 1px solid rgba(17,24,39,0.70);
+    border-radius: 3px;
+    background: rgba(255,255,255,0.90);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.22);
+    color: #111827;
+    font: 700 11px/1.25 Arial, sans-serif;
+    text-align: center;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.heat-data-label span {
+    display: block;
+    margin-top: 1px;
+    color: #374151;
+    font-weight: 600;
+}
 </style>
 
 </head>
@@ -621,6 +642,8 @@ const incidentHeatLayer = L.heatLayer([], {
         1.00: "#dc2626"
     }
 }).addTo(map);
+
+const heatLabelLayer = L.layerGroup().addTo(map);
 
 
 /* =========================================================
@@ -5360,80 +5383,206 @@ Promise.all([
 
 
 /* =========================================================
-   HEAT MAP RENDERER
+   DRILL-DOWN HEAT MAP
+   Each view has a heat surface plus plain text count labels.
+   Labels are clickable; they are not bubble markers.
    ========================================================= */
 
-function renderIncidentHeatMap() {
+function clearHeatVisuals() {
+    incidentHeatLayer.setLatLngs([]);
+    heatLabelLayer.clearLayers();
+}
 
-    const rows =
-        CITIES.flatMap(city =>
-            (municipalityIncidentRows[city] || []).filter(row =>
-                Number.isFinite(row.lat) &&
-                Number.isFinite(row.lng) &&
-                Number(row.count) > 0
-            )
-        );
 
-    if (!rows.length) {
-        incidentHeatLayer.setLatLngs([]);
-        return;
-    }
+function getHeatWeight(count, stats) {
+    if (!Number(count) || !stats || !stats.max) return 0;
+    if (stats.max === stats.min) return 0.60;
+    if (count <= stats.lowLimit) return 0.25;  // green
+    if (count <= stats.highLimit) return 0.60; // yellow
+    return 1.00;                                // red
+}
 
-    const maxCount =
-        Math.max(
-            ...rows.map(row => Number(row.count)),
-            1
-        );
 
-    /*
-       Leaflet.heat accepts a weight between 0 and 1.
-       Square-root scaling preserves visible lower-count areas
-       when one location has an unusually high incident total.
-    */
+function addHeatCountLabel(item, title, onClick) {
+    if (!Number.isFinite(item.lat) || !Number.isFinite(item.lng)) return;
+
+    const icon = L.divIcon({
+        className: "heat-label-marker",
+        html: `<div class="heat-data-label"><b>${title}</b><span>${Number(item.count || 0).toLocaleString()} incidents</span></div>`,
+        iconSize: [112, 42],
+        iconAnchor: [56, 21]
+    });
+
+    const label = L.marker([item.lat, item.lng], {
+        icon,
+        keyboard: true,
+        zIndexOffset: 2000,
+        interactive: true
+    });
+
+    if (onClick) label.on("click", onClick);
+    heatLabelLayer.addLayer(label);
+}
+
+
+function renderHeatLevel(items, labelFor, onClickFor, radius) {
+    clearHeatVisuals();
+
+    const visible = (items || []).filter(item =>
+        Number.isFinite(item.lat) &&
+        Number.isFinite(item.lng) &&
+        Number(item.count) > 0
+    );
+
+    if (!visible.length) return;
+
+    const stats = calculateLayerRisk(visible);
+
+    incidentHeatLayer.setOptions({
+        radius: radius,
+        blur: Math.round(radius * 0.72),
+        minOpacity: 0.28,
+        maxZoom: 16,
+        gradient: {
+            0.00: "#16a34a",
+            0.50: "#facc15",
+            1.00: "#dc2626"
+        }
+    });
+
     incidentHeatLayer.setLatLngs(
-        rows.map(row => [
-            row.lat,
-            row.lng,
-            Math.sqrt(Number(row.count) / maxCount)
+        visible.map(item => [
+            item.lat,
+            item.lng,
+            getHeatWeight(Number(item.count), stats)
         ])
+    );
+
+    visible.forEach(item =>
+        addHeatCountLabel(item, labelFor(item), onClickFor(item))
     );
 }
 
 
-function showMunicipalityOverview() {
+function fitToItems(items, padding, maxZoom) {
+    const points = (items || [])
+        .filter(item => Number.isFinite(item.lat) && Number.isFinite(item.lng))
+        .map(item => [item.lat, item.lng]);
 
+    if (!points.length) return;
+    const bounds = L.latLngBounds(points);
+    if (bounds.isValid()) map.fitBounds(bounds, { padding, maxZoom });
+}
+
+
+function showMunicipalityOverview() {
     drillLevel = 0;
     selectedMunicipality = null;
     selectedCluster = null;
     selectedSubCluster = null;
     currentClusters = [];
 
-    renderIncidentHeatMap();
+    const municipalities = CITIES.map(city => ({
+        city,
+        count: municipalityTotals[city] || 0,
+        lat: municipalityCenters[city]?.lat,
+        lng: municipalityCenters[city]?.long
+    }));
 
-    const boundaries =
-        CITIES.map(city => municipalityBoundaryLayers[city])
-            .filter(Boolean);
-
-    if (boundaries.length) {
-
-        const bounds =
-            L.featureGroup(boundaries).getBounds();
-
-        if (bounds.isValid()) {
-            map.fitBounds(bounds, { padding: [30, 30] });
-        }
-    }
-
-    updateMapInfo(
-        "Heat map — blue/green: lower activity; yellow/red: higher activity"
+    renderHeatLevel(
+        municipalities,
+        item => item.city,
+        item => () => showMunicipality(item.city),
+        82
     );
 
-    const backButton =
-        document.querySelector(".map-back-button");
+    CITIES.forEach(city => {
+        const boundary = municipalityBoundaryLayers[city];
+        if (!boundary) return;
+        boundary.off("click");
+        boundary.on("click", () => showMunicipality(city));
+    });
 
-    if (backButton) {
-        backButton.style.display = "none";
+    const boundaries = CITIES.map(city => municipalityBoundaryLayers[city]).filter(Boolean);
+    if (boundaries.length) {
+        const bounds = L.featureGroup(boundaries).getBounds();
+        if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30] });
     }
+
+    updateMapInfo("Municipalities — click a municipality or its count label");
+    updateBackButton();
+}
+
+
+function showMunicipality(city) {
+    selectedMunicipality = city;
+    selectedCluster = null;
+    selectedSubCluster = null;
+    drillLevel = 1;
+
+    const rows = prepareRows(municipalityIncidentRows[city] || [], city);
+    currentClusters = createClusters(rows);
+
+    renderHeatLevel(
+        currentClusters,
+        item => `Group ${item.index + 1}`,
+        item => () => showSecondLevel(item, city),
+        62
+    );
+
+    const boundary = municipalityBoundaryLayers[city];
+    if (boundary && boundary.getBounds().isValid()) {
+        map.fitBounds(boundary.getBounds(), { padding: [70, 70], maxZoom: 13 });
+    }
+
+    updateMapInfo(`<b>${city}</b> — 3 heat groups; click a group label`);
+    updateBackButton();
+}
+
+
+function showSecondLevel(cluster, city) {
+    selectedCluster = cluster;
+    selectedSubCluster = null;
+    drillLevel = 2;
+
+    currentClusters = createClusters(cluster.items || []);
+
+    renderHeatLevel(
+        currentClusters,
+        item => `Sub-group ${item.index + 1}`,
+        item => () => showDistrictLevel(item, city),
+        52
+    );
+
+    fitToItems(cluster.items, [100, 100], 15);
+    updateMapInfo(`<b>${city}</b> — Group ${cluster.index + 1}; click a sub-group label`);
+    updateBackButton();
+}
+
+
+function showDistrictLevel(cluster, city) {
+    selectedSubCluster = cluster;
+    drillLevel = 3;
+
+    const rows = cluster.items || [];
+    renderHeatLevel(
+        rows,
+        item => item.name || "District",
+        item => () => {
+            window.parent.postMessage({
+                type: "mapClick",
+                state: item.name,
+                municipality: city,
+                lat: item.lat,
+                long: item.lng
+            }, "*");
+        },
+        42
+    );
+
+    fitToItems(rows, [90, 90], 17);
+    updateMapInfo(`<b>${city}</b> — districts; click a district label to filter Grafana`);
+    updateBackButton();
 }
 /* =========================================================
    APPLY GRAFANA DATA
