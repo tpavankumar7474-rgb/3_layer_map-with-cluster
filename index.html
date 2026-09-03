@@ -1,3 +1,349 @@
+
+Today 11:50 AM
+
+Pasted text(20260903-062029).txt
+Document
+import os
+import geopandas as gpd
+import folium
+from folium.plugins import HeatMap
+
+# ======================================================
+# YOUR MAP FOLDER
+# ======================================================
+
+folder = r"C:\Users\User\Downloads\3_layer_map-with-cluster-main\3_layer_map-with-cluster-main"
+
+geojson = os.path.join(folder, "municipality.geojson")
+
+# Load GeoJSON
+gdf = gpd.read_file(geojson)
+
+# Convert to Latitude/Longitude
+gdf = gdf.to_crs(epsg=4326)
+
+# ------------------------------------------------------
+# Municipality name column
+# ------------------------------------------------------
+
+name_col = None
+for c in ["name","NAME","Name","name_en","NAME_EN","Municipality","municipality"]:
+if c in gdf.columns:
+name_col = c
+break
+
+if name_col is None:
+gdf["Municipality"] = [f"Municipality {i+1}" for i in range(len(gdf))]
+name_col = "Municipality"
+
+# ------------------------------------------------------
+# Dummy incident counts
+# ------------------------------------------------------
+
+dummy_counts = {
+"dammam": 8500,
+"khobar": 6800,
+"dhahran": 4200
+}
+
+fallback = [1200,1800,2500,3400,4600,5400,6300,7100,8200]
+
+heat_data = []
+
+# Center of map
+center = gdf.unary_union.centroid
+
+m = folium.Map(
+location=[center.y, center.x],
+zoom_start=10,
+tiles=None
+)
+
+# ======================================================
+# GOOGLE EARTH SATELLITE
+# ======================================================
+
+folium.TileLayer(
+tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+attr="Esri World Imagery",
+name="Google Earth Style Satellite"
+).add_to(m)
+
+# Roads (transparent overlay)
+folium.TileLayer(
+tiles="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+attr="OpenStreetMap",
+opacity=0.25,
+name="Road Labels"
+).add_to(m)
+
+# ======================================================
+# ADD MUNICIPALITY HEAT + COUNT
+# ======================================================
+
+for i,row in gdf.iterrows():
+
+name = str(row[name\_col])
+
+key = name.lower().replace("municipality","").replace("al ","").strip()
+
+count = dummy\_counts.get(key, fallback[i % len(fallback)])
+
+centroid = row\.geometry.centroid
+
+lat = centroid.y
+lon = centroid.x
+
+\# Heat intensity
+heat\_data.append([lat, lon, count])
+
+\# Municipality outline
+folium.GeoJson(
+    row\.geometry,
+    style\_function=lambda x: {
+        "color":"white",
+        "weight":2,
+        "fillOpacity":0
+    },
+    tooltip=f"{name}\<br>Incidents: {count:,}"
+).add\_to(m)
+
+\# White bubble with count
+folium.CircleMarker(
+    location=[lat, lon],
+    radius=22,
+    color="black",
+    weight=2,
+    fill=True,
+    fill\_color="white",
+    fill\_opacity=0.95
+).add\_to(m)
+
+folium.Marker(
+    location=[lat, lon],
+    icon=folium.DivIcon(html=f"""
+    \<div style="
+    font-size:15px;
+    font-weight\:bold;
+    color\:black;
+    text-align\:center;
+    width:90px;
+    margin-left:-35px;
+    margin-top:-8px;">
+    {count:,}
+    \</div>
+    """)
+).add\_to(m)
+# ======================================================
+# WEATHER STYLE HEATMAP
+# ======================================================
+
+HeatMap(
+heat_data,
+radius=70,
+blur=55,
+max_zoom=13,
+min_opacity=0.35,
+gradient={
+0.20:"blue",
+0.35:"cyan",
+0.50:"lime",
+0.70:"yellow",
+0.85:"orange",
+1.00:"red"
+}
+).add_to(m)
+
+folium.LayerControl().add_to(m)
+
+# ======================================================
+# SAVE HTML
+# ======================================================
+
+output = os.path.join(folder, "Saudi_GoogleEarth_HeatMap.html")
+
+m.save(output)
+
+print("HTML saved to:")
+print(output)
+
+# Open automatically
+import webbrowser
+webbrowser.open(output)
+same way heat map i want tin my html code as welel
+
+
+Today 2:41 PM
+
+Pasted text(20260903-090626).txt
+Document
+now in this each muncipality ur giving 3 colour for heat but i want three colours based on count 
+for example if dhdhama has highest count show three coloures like light red miumd red then drak red same and this should ocupie inside and entire munciaplity layer 
+same way for alkhobar and dhaharan yeellow and green 
+2.second level gorup data based on distrcit we are groping into 3 right take few distrcits and show number if number is high red like layer light middile dark red even remeing two parts yellow and green 
+thired layer also same but based on count direct show distrci and count not required heat behind here 
+and one more thing here is we are showing total muncipality count in center no show count exactly center points for distrcits on there particular muncipality 
+i hope u understand what i mean
+
+Generated image: Municipalities Incident Overview Dashboard
+
+
+Edit
+
+
+Edited image
+093abb80-7de3-465d-96bc-6e41d540c4e7.png
+wow nice this is my map first layer is municaplity and secong layer i am expeceting 3 more groups when i click any muciaplity then show again three groups red green yellow when i click red then show final out like above image which u given that to be again 3 colours match 
+
+Generated image: Multi-Level Municipality Drill-Down Dashboard
+
+
+Edit
+
+
+Edited image
+group 1 and 3 correct even last group i want three colour 
+
+Generated image: Municipality Incident Drill-Down Dashboard
+
+
+Edit
+
+
+Generated image: Incident Drill-Down Dashboard Map
+
+
+Edit
+
+
+399dd487-a1a5-4355-8844-44558d1024c5.png
+level 3 also same colours but based on count red yellow green 
+use this map and create proper image pls
+
+Generated image: Three-Level Incident Map Dashboard
+
+
+Edit
+
+
+0a6742be-7238-481e-a0c7-aeefaec54c0d.png
+this map wise i asked right why cant u give like that check shape
+
+Yes bro — now I understand the shape requirement clearly. The screenshot you provided is the correct reference.
+
+You don't want artificially created circles, bubbles, or rounded blobs.
+
+You want the actual geographic shape from your GeoJSON, like this:
+
+Level 1 — Municipalities
+Your existing municipality GeoJSON gives the real shapes:
+
+🔴 Dammam
+
+🟡 Khobar
+
+🟢 Dhahran
+
+Level 2 — Groups
+When you click Dammam, we divide the actual Dammam geographic area into 3 geographic groups:
+
+🔴 Group 1
+
+🟡 Group 2
+
+🟢 Group 3
+
+The boundaries should follow the actual district polygons, so the result looks like your screenshot — not a circle.
+
+Level 3 — Direct Districts
+When you click Group 1, we show the actual district polygons belonging to Group 1, again using their original shapes.
+
+Each district gets a color based on its count:
+
+LOW COUNT       → light shade
+MEDIUM COUNT    → medium shade
+HIGH COUNT      → dark shade
+And the three color families remain:
+
+🔴 RED    = high
+🟡 YELLOW = medium
+🟢 GREEN  = low
+So the final flow is:
+
+MUNICIPALITY
+     ↓
+3 ACTUAL-SHAPE GROUPS
+     ↓
+ACTUAL DISTRICTS
+No Sub-Group level. No circles. No fake polygons. No extra level.
+
+And most importantly, at Level 3 the map should look like your uploaded Dammam image: real district shapes fitted together to form the selected group's geographic area, with the count displayed at each district's actual location.
+
+I would modify your existing HTML around this logic rather than creating another completely different map.
+
+
+
+Pasted text(20260903-095011).txt
+Document
+yes
+
+Yes bro 👍 I’ve updated your actual HTML map exactly according to what we agreed:
+
+Final hierarchy
+Level 1 — Municipalities
+
+🔴 Dammam
+
+🟡 Khobar
+
+🟢 Dhahran
+
+Level 2 — Groups
+
+3 groups inside the selected municipality
+
+Group 1 → 🔴 Red
+
+Group 2 → 🟡 Yellow
+
+Group 3 → 🟢 Green
+
+Uses the actual district GeoJSON shapes, not circles.
+
+Level 3 — Direct Districts
+
+No Sub-Group.
+
+Selected group opens its actual district polygons.
+
+District color is calculated from incident count:
+
+🟢 Low
+
+🟡 Medium
+
+🔴 High
+
+Count is displayed at the district's actual coordinate.
+
+Grafana still receives the original latitude/longitude when a district is clicked.
+
+Back
+
+Level 3 → Groups
+
+Level 2 → Municipalities
+
+Municipality → Overview
+
+I also checked the JavaScript syntax; it passes successfully.
+
+Download the updated HTML
+Download Municipality 3-Level Actual Shape Map
+
+This version is based directly on the HTML you uploaded. 
+
+
 <!DOCTYPE html>
 <html>
 
@@ -610,6 +956,13 @@ const municipalityIncidentRows = {
 
     Khobar: []
 
+};
+
+/* Actual district GeoJSON features, keyed by normalized district name. */
+const districtFeaturesByCity = {
+    Dammam: {},
+    Dhahran: {},
+    Khobar: {}
 };
 
 
@@ -4568,6 +4921,9 @@ function makeDistrictNodes(
 
             }
 
+            /* Keep the original geographic shape for drill-down maps. */
+            districtFeaturesByCity[city][districtLookupKey(districtName)] = feature;
+
 
             districtToCity[
                 districtName
@@ -5098,11 +5454,7 @@ Promise.all([
 
                         function() {
 
-                            boundary.setStyle(
-
-                                boundaryStyle()
-
-                            );
+                            refreshMunicipalityHeatFills();
 
                         }
 
@@ -5524,103 +5876,501 @@ Promise.all([
 
 
 /* =========================================================
-   DRILL-DOWN HEAT MAP
-   Each view has a heat surface plus plain text count labels.
-   Labels are clickable; they are not bubble markers.
+   HIERARCHICAL GEOGRAPHIC DRILL-DOWN
+   LEVEL 1 = MUNICIPALITIES
+   LEVEL 2 = 3 ACTUAL-SHAPE GROUPS
+   LEVEL 3 = DIRECT DISTRICTS
+
+   IMPORTANT:
+   - Groups are geographic collections of the real district
+     polygons. No circles / bubble groups are used.
+   - Group 1 = RED, Group 2 = YELLOW, Group 3 = GREEN.
+   - At Level 3, districts are colored by their incident count:
+       low    = green
+       medium = yellow
+       high   = red
+   - Original row.lat / row.lng are never changed for Grafana.
    ========================================================= */
 
-function clearHeatVisuals() {
-    incidentHeatLayer.setLatLngs([]);
-    heatLabelLayer.clearLayers();
-}
-
-
-function getHeatWeight(count, stats) {
-    count = Number(count || 0);
-
-    if (!count || !stats || !stats.max) return 0;
-
-    if (stats.max === stats.min) return 1;
-
-    return Math.max(0.08, count / stats.max);
-}
-
-
-function addHeatCountLabel(item, title, onClick) {
-    if (!Number.isFinite(item.lat) || !Number.isFinite(item.lng)) return;
-
-    const icon = L.divIcon({
-        className: "heat-label-marker",
-        html: `<div class="heat-data-label"><b>${title}</b><span>${Number(item.count || 0).toLocaleString()} incidents</span></div>`,
-        iconSize: [112, 42],
-        iconAnchor: [56, 21]
-    });
-
-    const label = L.marker([item.lat, item.lng], {
-        icon,
-        keyboard: true,
-        zIndexOffset: 2000,
-        interactive: true
-    });
-
-    if (onClick) label.on("click", onClick);
-    heatLabelLayer.addLayer(label);
-}
-
-
-function renderHeatLevel(items, labelFor, onClickFor, radius) {
+function clearDrillVisuals() {
+    clearBubbleLayer();
     clearHeatVisuals();
 
-    const visible = (items || []).filter(item =>
-        Number.isFinite(item.lat) &&
-        Number.isFinite(item.lng) &&
-        Number(item.count) > 0
+    if (window.drillShapeLayer) {
+        map.removeLayer(window.drillShapeLayer);
+        window.drillShapeLayer = null;
+    }
+
+    if (window.drillLabelLayer) {
+        map.removeLayer(window.drillLabelLayer);
+        window.drillLabelLayer = null;
+    }
+}
+
+function groupPalette(index) {
+    if (index === 0) {
+        return {
+            name: "Red",
+            light: "#fecaca",
+            mid: "#ef4444",
+            dark: "#991b1b"
+        };
+    }
+
+    if (index === 1) {
+        return {
+            name: "Yellow",
+            light: "#fef3c7",
+            mid: "#facc15",
+            dark: "#a16207"
+        };
+    }
+
+    return {
+        name: "Green",
+        light: "#bbf7d0",
+        mid: "#22c55e",
+        dark: "#166534"
+    };
+}
+
+function interpolateHex(a, b, t) {
+    t = Math.max(0, Math.min(1, Number(t) || 0));
+
+    const ah = a.replace("#", "");
+    const bh = b.replace("#", "");
+
+    const ar = parseInt(ah.substring(0, 2), 16);
+    const ag = parseInt(ah.substring(2, 4), 16);
+    const ab = parseInt(ah.substring(4, 6), 16);
+
+    const br = parseInt(bh.substring(0, 2), 16);
+    const bg = parseInt(bh.substring(2, 4), 16);
+    const bb = parseInt(bh.substring(4, 6), 16);
+
+    const r = Math.round(ar + (br - ar) * t);
+    const g = Math.round(ag + (bg - ag) * t);
+    const b2 = Math.round(ab + (bb - ab) * t);
+
+    return "#" +
+        [r, g, b2]
+            .map(v => v.toString(16).padStart(2, "0"))
+            .join("");
+}
+
+function shadeFromCount(count, stats, palette) {
+    const value = Number(count || 0);
+
+    if (!stats || stats.max <= stats.min) {
+        return palette.mid;
+    }
+
+    const ratio =
+        Math.max(
+            0,
+            Math.min(
+                1,
+                (value - stats.min) /
+                (stats.max - stats.min)
+            )
+        );
+
+    if (ratio <= 0.5) {
+        return interpolateHex(
+            palette.light,
+            palette.mid,
+            ratio * 2
+        );
+    }
+
+    return interpolateHex(
+        palette.mid,
+        palette.dark,
+        (ratio - 0.5) * 2
+    );
+}
+
+function getDistrictFeature(city, name) {
+    return districtFeaturesByCity[city]?.[
+        districtLookupKey(name)
+    ] || null;
+}
+
+function createGeographicGroupLayer(cluster, city, groupStats) {
+    const groupIndex = Number(cluster.index || 0);
+    const palette = groupPalette(groupIndex);
+    const fill = shadeFromCount(
+        cluster.count,
+        groupStats,
+        palette
     );
 
-    if (!visible.length) return;
+    const featureCollection = {
+        type: "FeatureCollection",
+        features: (cluster.items || [])
+            .map(row => getDistrictFeature(city, row.name))
+            .filter(Boolean)
+    };
 
-    const stats = calculateLayerRisk(visible);
+    if (!featureCollection.features.length) {
+        return null;
+    }
 
-    incidentHeatLayer.setOptions({
-        radius: radius,
-        blur: Math.round(radius * 0.7857),
-        minOpacity: 0.35,
-        maxZoom: 13,
-        gradient: {
-            0.10: "#bbf7d0",
-            0.25: "#22c55e",
-            0.45: "#fef08a",
-            0.60: "#facc15",
-            0.78: "#fecaca",
-            0.90: "#ef4444",
-            1.00: "#991b1b"
+    const layer = L.geoJSON(
+        featureCollection,
+        {
+            style: {
+                color: palette.dark,
+                weight: 2,
+                opacity: 0.95,
+                fillColor: fill,
+                fillOpacity: 0.78
+            },
+
+            onEachFeature: function(feature, featureLayer) {
+                featureLayer.on("mouseover", function(e) {
+                    e.target.setStyle({
+                        weight: 3,
+                        fillColor: fill,
+                        fillOpacity: 0.92
+                    });
+                });
+
+                featureLayer.on("mouseout", function(e) {
+                    e.target.setStyle({
+                        weight: 2,
+                        fillColor: fill,
+                        fillOpacity: 0.78
+                    });
+                });
+
+                featureLayer.on("click", function() {
+                    showDistrictLevel(cluster, city);
+                });
+            }
         }
+    );
+
+    layer.bindTooltip(
+        `<b>Group ${groupIndex + 1}</b><br>` +
+        `<b>Incidents:</b> ${Number(cluster.count || 0).toLocaleString()}<br>` +
+        `<b>Color:</b> ${palette.name}<br><br>` +
+        `<b>Click to view districts</b>`,
+        {
+            sticky: true,
+            direction: "top",
+            opacity: 0.95,
+            className: "custom-tooltip"
+        }
+    );
+
+    return layer;
+}
+
+function createGroupLabels(clusters) {
+    const labels = L.layerGroup();
+
+    clusters.forEach(cluster => {
+        if (
+            !Number.isFinite(cluster.lat) ||
+            !Number.isFinite(cluster.lng)
+        ) {
+            return;
+        }
+
+        const palette = groupPalette(cluster.index);
+
+        const marker = L.marker(
+            [cluster.lat, cluster.lng],
+            {
+                icon: L.divIcon({
+                    className: "group-shape-label",
+                    html: `
+                        <div style="
+                            background:rgba(17,24,39,0.86);
+                            color:white;
+                            border:1px solid ${palette.mid};
+                            border-radius:7px;
+                            padding:7px 10px;
+                            min-width:100px;
+                            text-align:center;
+                            font:700 12px/1.3 Arial,sans-serif;
+                            box-shadow:0 2px 8px rgba(0,0,0,.30);
+                            cursor:pointer;
+                        ">
+                            <div>Group ${cluster.index + 1}</div>
+                            <div>${Number(cluster.count || 0).toLocaleString()}</div>
+                        </div>
+                    `,
+                    iconSize: [120, 48],
+                    iconAnchor: [60, 24]
+                }),
+                zIndexOffset: 1900,
+                interactive: true
+            }
+        );
+
+        marker.on("click", () => {
+            showDistrictLevel(cluster, selectedMunicipality);
+        });
+
+        labels.addLayer(marker);
     });
 
-    incidentHeatLayer.setLatLngs(
-        visible.map(item => [
-            item.lat,
-            item.lng,
-            getHeatWeight(Number(item.count), stats)
-        ])
-    );
-
-    visible.forEach(item =>
-        addHeatCountLabel(item, labelFor(item), onClickFor(item))
-    );
+    return labels;
 }
 
+function createDistrictColor(count, stats) {
+    const risk = getLayerRisk(count, stats);
 
-function fitToItems(items, padding, maxZoom) {
-    const points = (items || [])
-        .filter(item => Number.isFinite(item.lat) && Number.isFinite(item.lng))
-        .map(item => [item.lat, item.lng]);
+    if (risk.level === "High") {
+        return "#dc2626";
+    }
 
-    if (!points.length) return;
-    const bounds = L.latLngBounds(points);
-    if (bounds.isValid()) map.fitBounds(bounds, { padding, maxZoom });
+    if (risk.level === "Medium") {
+        return "#facc15";
+    }
+
+    if (risk.level === "Low") {
+        return "#22c55e";
+    }
+
+    return "#94a3b8";
 }
 
+function createDistrictShade(count, stats) {
+    const value = Number(count || 0);
+
+    if (!stats || stats.max <= 0) {
+        return "#94a3b8";
+    }
+
+    const ratio =
+        stats.max === stats.min
+            ? 1
+            : Math.max(
+                0,
+                Math.min(
+                    1,
+                    (value - stats.min) /
+                    (stats.max - stats.min)
+                )
+            );
+
+    const base = createDistrictColor(value, stats);
+
+    if (base === "#dc2626") {
+        return interpolateHex("#fecaca", "#991b1b", ratio);
+    }
+
+    if (base === "#facc15") {
+        return interpolateHex("#fef3c7", "#a16207", ratio);
+    }
+
+    if (base === "#22c55e") {
+        return interpolateHex("#bbf7d0", "#166534", ratio);
+    }
+
+    return "#94a3b8";
+}
+
+function createDistrictLevelLayer(rows, city) {
+    const stats = calculateLayerRisk(rows);
+
+    const features = rows
+        .map(row => {
+            const feature =
+                getDistrictFeature(city, row.name);
+
+            if (!feature) return null;
+
+            return {
+                type: "Feature",
+                geometry: feature.geometry,
+                properties: {
+                    districtName: row.name,
+                    count: Number(row.count || 0)
+                }
+            };
+        })
+        .filter(Boolean);
+
+    if (!features.length) {
+        return null;
+    }
+
+    const layer = L.geoJSON(
+        {
+            type: "FeatureCollection",
+            features
+        },
+        {
+            style: function(feature) {
+                const count =
+                    Number(
+                        feature.properties?.count || 0
+                    );
+
+                return {
+                    color: "#374151",
+                    weight: 1.5,
+                    opacity: 0.90,
+                    fillColor: createDistrictShade(
+                        count,
+                        stats
+                    ),
+                    fillOpacity: count > 0 ? 0.58 : 0.08
+                };
+            },
+
+            onEachFeature: function(feature, featureLayer) {
+                const name =
+                    feature.properties?.districtName ||
+                    "District";
+
+                const count =
+                    Number(
+                        feature.properties?.count || 0
+                    );
+
+                const risk =
+                    getLayerRisk(count, stats);
+
+                featureLayer.bindTooltip(
+                    districtTooltipHtml(
+                        name,
+                        city,
+                        count,
+                        risk
+                    ),
+                    {
+                        sticky: true,
+                        direction: "top",
+                        opacity: 0.95,
+                        className: "custom-tooltip"
+                    }
+                );
+
+                featureLayer.on("mouseover", function(e) {
+                    e.target.setStyle({
+                        weight: 3,
+                        fillOpacity: 0.78
+                    });
+                });
+
+                featureLayer.on("mouseout", function(e) {
+                    e.target.setStyle({
+                        weight: 1.5,
+                        fillOpacity: count > 0 ? 0.58 : 0.08
+                    });
+                });
+
+                featureLayer.on("click", function() {
+                    const row =
+                        rows.find(
+                            r =>
+                                districtLookupKey(r.name) ===
+                                districtLookupKey(name)
+                        );
+
+                    if (!row) return;
+
+                    /* Always send original Grafana coordinates. */
+                    window.parent.postMessage(
+                        {
+                            type: "mapClick",
+                            state: row.name,
+                            municipality: city,
+                            lat: row.lat,
+                            long: row.lng
+                        },
+                        "*"
+                    );
+                });
+            }
+        }
+    );
+
+    return layer;
+}
+
+function createDistrictCountLabels(rows, city) {
+    const labels = L.layerGroup();
+
+    rows.forEach(row => {
+        if (
+            !Number.isFinite(row.lat) ||
+            !Number.isFinite(row.lng)
+        ) {
+            return;
+        }
+
+        const count = Number(row.count || 0);
+        if (count <= 0) return;
+
+        const label = L.marker(
+            [row.lat, row.lng],
+            {
+                icon: L.divIcon({
+                    className: "district-count-label",
+                    html: `
+                        <div style="
+                            background:rgba(255,255,255,0.94);
+                            color:#111827;
+                            border:2px solid #374151;
+                            border-radius:50%;
+                            min-width:42px;
+                            height:42px;
+                            padding:0 5px;
+                            display:flex;
+                            align-items:center;
+                            justify-content:center;
+                            box-sizing:border-box;
+                            font:800 10px/1 Arial,sans-serif;
+                            text-align:center;
+                            box-shadow:0 2px 7px rgba(0,0,0,.28);
+                            cursor:pointer;
+                        ">
+                            ${count.toLocaleString()}
+                        </div>
+                    `,
+                    iconSize: [52, 52],
+                    iconAnchor: [26, 26]
+                }),
+                zIndexOffset: 2000,
+                interactive: true
+            }
+        );
+
+        label.bindTooltip(
+            `<b>${row.name || "District"}</b><br>` +
+            `<b>Incidents:</b> ${count.toLocaleString()}`,
+            {
+                sticky: true,
+                direction: "top",
+                opacity: 0.95,
+                className: "custom-tooltip"
+            }
+        );
+
+        label.on("click", () => {
+            window.parent.postMessage(
+                {
+                    type: "mapClick",
+                    state: row.name,
+                    municipality: city,
+                    lat: row.lat,
+                    long: row.lng
+                },
+                "*"
+            );
+        });
+
+        labels.addLayer(label);
+    });
+
+    return labels;
+}
 
 function showMunicipalityOverview() {
     drillLevel = 0;
@@ -5629,37 +6379,51 @@ function showMunicipalityOverview() {
     selectedSubCluster = null;
     currentClusters = [];
 
-    const municipalities = CITIES.map(city => ({
-        city,
-        count: municipalityTotals[city] || 0,
-        lat: municipalityCenters[city]?.lat,
-        lng: municipalityCenters[city]?.long
-    }));
+    clearDrillVisuals();
 
-    renderHeatLevel(
-        municipalities,
-        item => item.city,
-        item => () => showMunicipality(item.city),
-        82
-    );
+    if (window.overviewDistrictLabels) {
+        map.removeLayer(window.overviewDistrictLabels);
+        window.overviewDistrictLabels = null;
+    }
+
+    refreshMunicipalityHeatFills();
+
+    window.overviewDistrictLabels =
+        createOverviewDistrictLabels();
+
+    window.overviewDistrictLabels.addTo(map);
 
     CITIES.forEach(city => {
         const boundary = municipalityBoundaryLayers[city];
+
         if (!boundary) return;
+
         boundary.off("click");
         boundary.on("click", () => showMunicipality(city));
     });
 
-    const boundaries = CITIES.map(city => municipalityBoundaryLayers[city]).filter(Boolean);
+    const boundaries = CITIES
+        .map(city => municipalityBoundaryLayers[city])
+        .filter(Boolean);
+
     if (boundaries.length) {
-        const bounds = L.featureGroup(boundaries).getBounds();
-        if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30] });
+        const bounds =
+            L.featureGroup(boundaries).getBounds();
+
+        if (bounds.isValid()) {
+            map.fitBounds(
+                bounds,
+                { padding: [30, 30] }
+            );
+        }
     }
 
-    updateMapInfo("Municipalities — click a municipality or its count label");
+    updateMapInfo(
+        "LEVEL 1 — Municipalities • Dammam RED • Khobar YELLOW • Dhahran GREEN"
+    );
+
     updateBackButton();
 }
-
 
 function showMunicipality(city) {
     selectedMunicipality = city;
@@ -5667,70 +6431,190 @@ function showMunicipality(city) {
     selectedSubCluster = null;
     drillLevel = 1;
 
-    const rows = prepareRows(municipalityIncidentRows[city] || [], city);
-    currentClusters = createClusters(rows);
+    clearDrillVisuals();
 
-    renderHeatLevel(
-        currentClusters,
-        item => `Group ${item.index + 1}`,
-        item => () => showSecondLevel(item, city),
-        62
-    );
+    const rows =
+        prepareRows(
+            municipalityIncidentRows[city] || [],
+            city
+        );
 
-    const boundary = municipalityBoundaryLayers[city];
-    if (boundary && boundary.getBounds().isValid()) {
-        map.fitBounds(boundary.getBounds(), { padding: [70, 70], maxZoom: 13 });
+    if (!rows.length) {
+        updateMapInfo(
+            `<b>${city}</b> — No incident data`
+        );
+        updateBackButton();
+        return;
     }
 
-    updateMapInfo(`<b>${city}</b> — 3 heat groups; click a group label`);
-    updateBackButton();
-}
+    currentClusters = createClusters(rows);
 
+    /* Exactly 3 geographic groups, in fixed color order. */
+    const groupStats =
+        calculateLayerRisk(currentClusters);
 
-function showSecondLevel(cluster, city) {
-    selectedCluster = cluster;
-    selectedSubCluster = null;
-    drillLevel = 2;
+    window.drillShapeLayer =
+        L.layerGroup().addTo(map);
 
-    currentClusters = createClusters(cluster.items || []);
+    currentClusters.forEach(cluster => {
+        const layer =
+            createGeographicGroupLayer(
+                cluster,
+                city,
+                groupStats
+            );
 
-    renderHeatLevel(
-        currentClusters,
-        item => `Sub-group ${item.index + 1}`,
-        item => () => showDistrictLevel(item, city),
-        52
+        if (layer) {
+            window.drillShapeLayer.addLayer(layer);
+        }
+    });
+
+    window.drillLabelLayer =
+        createGroupLabels(currentClusters);
+
+    window.drillLabelLayer.addTo(map);
+
+    const boundary =
+        municipalityBoundaryLayers[city];
+
+    if (boundary && boundary.getBounds().isValid()) {
+        map.fitBounds(
+            boundary.getBounds(),
+            {
+                padding: [70, 70],
+                maxZoom: 13
+            }
+        );
+    }
+
+    updateMapInfo(
+        `<b>${city}</b> — LEVEL 2: 3 geographic groups ` +
+        `(RED • YELLOW • GREEN). Click any group to view districts.`
     );
 
-    fitToItems(cluster.items, [100, 100], 15);
-    updateMapInfo(`<b>${city}</b> — Group ${cluster.index + 1}; click a sub-group label`);
     updateBackButton();
 }
-
 
 function showDistrictLevel(cluster, city) {
-    selectedSubCluster = cluster;
+    selectedCluster = cluster;
+    selectedSubCluster = null;
     drillLevel = 3;
 
-    const rows = cluster.items || [];
-    renderHeatLevel(
-        rows,
-        item => item.name || "District",
-        item => () => {
-            window.parent.postMessage({
-                type: "mapClick",
-                state: item.name,
-                municipality: city,
-                lat: item.lat,
-                long: item.lng
-            }, "*");
-        },
-        42
+    clearDrillVisuals();
+
+    const rows =
+        cluster.items || [];
+
+    if (!rows.length) {
+        updateMapInfo(
+            `${city} → No districts`
+        );
+        updateBackButton();
+        return;
+    }
+
+    /*
+       LEVEL 3:
+       Direct districts — NO sub-group.
+       Each real district polygon gets a shade based
+       on the incident count within this selected group.
+    */
+
+    window.drillShapeLayer =
+        createDistrictLevelLayer(
+            rows,
+            city
+        );
+
+    if (window.drillShapeLayer) {
+        window.drillShapeLayer.addTo(map);
+    }
+
+    window.drillLabelLayer =
+        createDistrictCountLabels(
+            rows,
+            city
+        );
+
+    window.drillLabelLayer.addTo(map);
+
+    const points =
+        rows.filter(
+            row =>
+                Number.isFinite(row.lat) &&
+                Number.isFinite(row.lng)
+        );
+
+    if (points.length) {
+        const bounds =
+            L.latLngBounds(
+                points.map(
+                    row => [row.lat, row.lng]
+                )
+            );
+
+        if (bounds.isValid()) {
+            map.fitBounds(
+                bounds,
+                {
+                    padding: [90, 90],
+                    maxZoom: 17
+                }
+            );
+        }
+    }
+
+    updateMapInfo(
+        `<b>${city}</b> → Group ${cluster.index + 1} → ` +
+        `<b>LEVEL 3: Districts</b> — ` +
+        `district color is based on incident count`
     );
 
-    fitToItems(rows, [90, 90], 17);
-    updateMapInfo(`<b>${city}</b> — districts; click a district label to filter Grafana`);
     updateBackButton();
 }
+
+function handleBack() {
+    /*
+       LEVEL 3 Districts → LEVEL 2 Groups
+    */
+    if (drillLevel === 3) {
+        if (selectedMunicipality) {
+            showMunicipality(selectedMunicipality);
+        }
+        return;
+    }
+
+    /*
+       LEVEL 2 Groups → LEVEL 1 Municipalities
+    */
+    if (drillLevel === 1) {
+        showMunicipalityOverview();
+        return;
+    }
+
+    showMunicipalityOverview();
+}
+
+function updateBackButton() {
+    const button =
+        document.querySelector(".map-back-button");
+
+    if (!button) return;
+
+    if (drillLevel === 0) {
+        button.style.display = "none";
+        return;
+    }
+
+    button.style.display = "block";
+
+    if (drillLevel === 1) {
+        button.innerHTML = "← Municipalities";
+    } else {
+        button.innerHTML = "← Groups";
+    }
+}
+
 /* =========================================================
    APPLY GRAFANA DATA
    ========================================================= */
@@ -6259,3 +7143,8 @@ window.addEventListener(
 </body>
 
 </html>
+
+Municipality_3Level_ActualShape_Groups_Districts.html
+HTML
+
+
