@@ -612,13 +612,6 @@ const municipalityIncidentRows = {
 
 };
 
-/* Actual district GeoJSON features, keyed by normalized district name. */
-const districtFeaturesByCity = {
-    Dammam: {},
-    Dhahran: {},
-    Khobar: {}
-};
-
 
 const municipalityTotals = {
 
@@ -4575,9 +4568,6 @@ function makeDistrictNodes(
 
             }
 
-            /* Keep the original geographic shape for drill-down maps. */
-            districtFeaturesByCity[city][districtLookupKey(districtName)] = feature;
-
 
             districtToCity[
                 districtName
@@ -5108,7 +5098,11 @@ Promise.all([
 
                         function() {
 
-                            refreshMunicipalityHeatFills();
+                            boundary.setStyle(
+
+                                boundaryStyle()
+
+                            );
 
                         }
 
@@ -5530,501 +5524,103 @@ Promise.all([
 
 
 /* =========================================================
-   HIERARCHICAL GEOGRAPHIC DRILL-DOWN
-   LEVEL 1 = MUNICIPALITIES
-   LEVEL 2 = 3 ACTUAL-SHAPE GROUPS
-   LEVEL 3 = DIRECT DISTRICTS
-
-   IMPORTANT:
-   - Groups are geographic collections of the real district
-     polygons. No circles / bubble groups are used.
-   - Group 1 = RED, Group 2 = YELLOW, Group 3 = GREEN.
-   - At Level 3, districts are colored by their incident count:
-       low    = green
-       medium = yellow
-       high   = red
-   - Original row.lat / row.lng are never changed for Grafana.
+   DRILL-DOWN HEAT MAP
+   Each view has a heat surface plus plain text count labels.
+   Labels are clickable; they are not bubble markers.
    ========================================================= */
 
-function clearDrillVisuals() {
-    clearBubbleLayer();
+function clearHeatVisuals() {
+    incidentHeatLayer.setLatLngs([]);
+    heatLabelLayer.clearLayers();
+}
+
+
+function getHeatWeight(count, stats) {
+    count = Number(count || 0);
+
+    if (!count || !stats || !stats.max) return 0;
+
+    if (stats.max === stats.min) return 1;
+
+    return Math.max(0.08, count / stats.max);
+}
+
+
+function addHeatCountLabel(item, title, onClick) {
+    if (!Number.isFinite(item.lat) || !Number.isFinite(item.lng)) return;
+
+    const icon = L.divIcon({
+        className: "heat-label-marker",
+        html: `<div class="heat-data-label"><b>${title}</b><span>${Number(item.count || 0).toLocaleString()} incidents</span></div>`,
+        iconSize: [112, 42],
+        iconAnchor: [56, 21]
+    });
+
+    const label = L.marker([item.lat, item.lng], {
+        icon,
+        keyboard: true,
+        zIndexOffset: 2000,
+        interactive: true
+    });
+
+    if (onClick) label.on("click", onClick);
+    heatLabelLayer.addLayer(label);
+}
+
+
+function renderHeatLevel(items, labelFor, onClickFor, radius) {
     clearHeatVisuals();
 
-    if (window.drillShapeLayer) {
-        map.removeLayer(window.drillShapeLayer);
-        window.drillShapeLayer = null;
-    }
-
-    if (window.drillLabelLayer) {
-        map.removeLayer(window.drillLabelLayer);
-        window.drillLabelLayer = null;
-    }
-}
-
-function groupPalette(index) {
-    if (index === 0) {
-        return {
-            name: "Red",
-            light: "#fecaca",
-            mid: "#ef4444",
-            dark: "#991b1b"
-        };
-    }
-
-    if (index === 1) {
-        return {
-            name: "Yellow",
-            light: "#fef3c7",
-            mid: "#facc15",
-            dark: "#a16207"
-        };
-    }
-
-    return {
-        name: "Green",
-        light: "#bbf7d0",
-        mid: "#22c55e",
-        dark: "#166534"
-    };
-}
-
-function interpolateHex(a, b, t) {
-    t = Math.max(0, Math.min(1, Number(t) || 0));
-
-    const ah = a.replace("#", "");
-    const bh = b.replace("#", "");
-
-    const ar = parseInt(ah.substring(0, 2), 16);
-    const ag = parseInt(ah.substring(2, 4), 16);
-    const ab = parseInt(ah.substring(4, 6), 16);
-
-    const br = parseInt(bh.substring(0, 2), 16);
-    const bg = parseInt(bh.substring(2, 4), 16);
-    const bb = parseInt(bh.substring(4, 6), 16);
-
-    const r = Math.round(ar + (br - ar) * t);
-    const g = Math.round(ag + (bg - ag) * t);
-    const b2 = Math.round(ab + (bb - ab) * t);
-
-    return "#" +
-        [r, g, b2]
-            .map(v => v.toString(16).padStart(2, "0"))
-            .join("");
-}
-
-function shadeFromCount(count, stats, palette) {
-    const value = Number(count || 0);
-
-    if (!stats || stats.max <= stats.min) {
-        return palette.mid;
-    }
-
-    const ratio =
-        Math.max(
-            0,
-            Math.min(
-                1,
-                (value - stats.min) /
-                (stats.max - stats.min)
-            )
-        );
-
-    if (ratio <= 0.5) {
-        return interpolateHex(
-            palette.light,
-            palette.mid,
-            ratio * 2
-        );
-    }
-
-    return interpolateHex(
-        palette.mid,
-        palette.dark,
-        (ratio - 0.5) * 2
-    );
-}
-
-function getDistrictFeature(city, name) {
-    return districtFeaturesByCity[city]?.[
-        districtLookupKey(name)
-    ] || null;
-}
-
-function createGeographicGroupLayer(cluster, city, groupStats) {
-    const groupIndex = Number(cluster.index || 0);
-    const palette = groupPalette(groupIndex);
-    const fill = shadeFromCount(
-        cluster.count,
-        groupStats,
-        palette
+    const visible = (items || []).filter(item =>
+        Number.isFinite(item.lat) &&
+        Number.isFinite(item.lng) &&
+        Number(item.count) > 0
     );
 
-    const featureCollection = {
-        type: "FeatureCollection",
-        features: (cluster.items || [])
-            .map(row => getDistrictFeature(city, row.name))
-            .filter(Boolean)
-    };
+    if (!visible.length) return;
 
-    if (!featureCollection.features.length) {
-        return null;
-    }
+    const stats = calculateLayerRisk(visible);
 
-    const layer = L.geoJSON(
-        featureCollection,
-        {
-            style: {
-                color: palette.dark,
-                weight: 2,
-                opacity: 0.95,
-                fillColor: fill,
-                fillOpacity: 0.78
-            },
-
-            onEachFeature: function(feature, featureLayer) {
-                featureLayer.on("mouseover", function(e) {
-                    e.target.setStyle({
-                        weight: 3,
-                        fillColor: fill,
-                        fillOpacity: 0.92
-                    });
-                });
-
-                featureLayer.on("mouseout", function(e) {
-                    e.target.setStyle({
-                        weight: 2,
-                        fillColor: fill,
-                        fillOpacity: 0.78
-                    });
-                });
-
-                featureLayer.on("click", function() {
-                    showDistrictLevel(cluster, city);
-                });
-            }
+    incidentHeatLayer.setOptions({
+        radius: radius,
+        blur: Math.round(radius * 0.7857),
+        minOpacity: 0.35,
+        maxZoom: 13,
+        gradient: {
+            0.10: "#bbf7d0",
+            0.25: "#22c55e",
+            0.45: "#fef08a",
+            0.60: "#facc15",
+            0.78: "#fecaca",
+            0.90: "#ef4444",
+            1.00: "#991b1b"
         }
-    );
-
-    layer.bindTooltip(
-        `<b>Group ${groupIndex + 1}</b><br>` +
-        `<b>Incidents:</b> ${Number(cluster.count || 0).toLocaleString()}<br>` +
-        `<b>Color:</b> ${palette.name}<br><br>` +
-        `<b>Click to view districts</b>`,
-        {
-            sticky: true,
-            direction: "top",
-            opacity: 0.95,
-            className: "custom-tooltip"
-        }
-    );
-
-    return layer;
-}
-
-function createGroupLabels(clusters) {
-    const labels = L.layerGroup();
-
-    clusters.forEach(cluster => {
-        if (
-            !Number.isFinite(cluster.lat) ||
-            !Number.isFinite(cluster.lng)
-        ) {
-            return;
-        }
-
-        const palette = groupPalette(cluster.index);
-
-        const marker = L.marker(
-            [cluster.lat, cluster.lng],
-            {
-                icon: L.divIcon({
-                    className: "group-shape-label",
-                    html: `
-                        <div style="
-                            background:rgba(17,24,39,0.86);
-                            color:white;
-                            border:1px solid ${palette.mid};
-                            border-radius:7px;
-                            padding:7px 10px;
-                            min-width:100px;
-                            text-align:center;
-                            font:700 12px/1.3 Arial,sans-serif;
-                            box-shadow:0 2px 8px rgba(0,0,0,.30);
-                            cursor:pointer;
-                        ">
-                            <div>Group ${cluster.index + 1}</div>
-                            <div>${Number(cluster.count || 0).toLocaleString()}</div>
-                        </div>
-                    `,
-                    iconSize: [120, 48],
-                    iconAnchor: [60, 24]
-                }),
-                zIndexOffset: 1900,
-                interactive: true
-            }
-        );
-
-        marker.on("click", () => {
-            showDistrictLevel(cluster, selectedMunicipality);
-        });
-
-        labels.addLayer(marker);
     });
 
-    return labels;
-}
-
-function createDistrictColor(count, stats) {
-    const risk = getLayerRisk(count, stats);
-
-    if (risk.level === "High") {
-        return "#dc2626";
-    }
-
-    if (risk.level === "Medium") {
-        return "#facc15";
-    }
-
-    if (risk.level === "Low") {
-        return "#22c55e";
-    }
-
-    return "#94a3b8";
-}
-
-function createDistrictShade(count, stats) {
-    const value = Number(count || 0);
-
-    if (!stats || stats.max <= 0) {
-        return "#94a3b8";
-    }
-
-    const ratio =
-        stats.max === stats.min
-            ? 1
-            : Math.max(
-                0,
-                Math.min(
-                    1,
-                    (value - stats.min) /
-                    (stats.max - stats.min)
-                )
-            );
-
-    const base = createDistrictColor(value, stats);
-
-    if (base === "#dc2626") {
-        return interpolateHex("#fecaca", "#991b1b", ratio);
-    }
-
-    if (base === "#facc15") {
-        return interpolateHex("#fef3c7", "#a16207", ratio);
-    }
-
-    if (base === "#22c55e") {
-        return interpolateHex("#bbf7d0", "#166534", ratio);
-    }
-
-    return "#94a3b8";
-}
-
-function createDistrictLevelLayer(rows, city) {
-    const stats = calculateLayerRisk(rows);
-
-    const features = rows
-        .map(row => {
-            const feature =
-                getDistrictFeature(city, row.name);
-
-            if (!feature) return null;
-
-            return {
-                type: "Feature",
-                geometry: feature.geometry,
-                properties: {
-                    districtName: row.name,
-                    count: Number(row.count || 0)
-                }
-            };
-        })
-        .filter(Boolean);
-
-    if (!features.length) {
-        return null;
-    }
-
-    const layer = L.geoJSON(
-        {
-            type: "FeatureCollection",
-            features
-        },
-        {
-            style: function(feature) {
-                const count =
-                    Number(
-                        feature.properties?.count || 0
-                    );
-
-                return {
-                    color: "#374151",
-                    weight: 1.5,
-                    opacity: 0.90,
-                    fillColor: createDistrictShade(
-                        count,
-                        stats
-                    ),
-                    fillOpacity: count > 0 ? 0.58 : 0.08
-                };
-            },
-
-            onEachFeature: function(feature, featureLayer) {
-                const name =
-                    feature.properties?.districtName ||
-                    "District";
-
-                const count =
-                    Number(
-                        feature.properties?.count || 0
-                    );
-
-                const risk =
-                    getLayerRisk(count, stats);
-
-                featureLayer.bindTooltip(
-                    districtTooltipHtml(
-                        name,
-                        city,
-                        count,
-                        risk
-                    ),
-                    {
-                        sticky: true,
-                        direction: "top",
-                        opacity: 0.95,
-                        className: "custom-tooltip"
-                    }
-                );
-
-                featureLayer.on("mouseover", function(e) {
-                    e.target.setStyle({
-                        weight: 3,
-                        fillOpacity: 0.78
-                    });
-                });
-
-                featureLayer.on("mouseout", function(e) {
-                    e.target.setStyle({
-                        weight: 1.5,
-                        fillOpacity: count > 0 ? 0.58 : 0.08
-                    });
-                });
-
-                featureLayer.on("click", function() {
-                    const row =
-                        rows.find(
-                            r =>
-                                districtLookupKey(r.name) ===
-                                districtLookupKey(name)
-                        );
-
-                    if (!row) return;
-
-                    /* Always send original Grafana coordinates. */
-                    window.parent.postMessage(
-                        {
-                            type: "mapClick",
-                            state: row.name,
-                            municipality: city,
-                            lat: row.lat,
-                            long: row.lng
-                        },
-                        "*"
-                    );
-                });
-            }
-        }
+    incidentHeatLayer.setLatLngs(
+        visible.map(item => [
+            item.lat,
+            item.lng,
+            getHeatWeight(Number(item.count), stats)
+        ])
     );
 
-    return layer;
+    visible.forEach(item =>
+        addHeatCountLabel(item, labelFor(item), onClickFor(item))
+    );
 }
 
-function createDistrictCountLabels(rows, city) {
-    const labels = L.layerGroup();
 
-    rows.forEach(row => {
-        if (
-            !Number.isFinite(row.lat) ||
-            !Number.isFinite(row.lng)
-        ) {
-            return;
-        }
+function fitToItems(items, padding, maxZoom) {
+    const points = (items || [])
+        .filter(item => Number.isFinite(item.lat) && Number.isFinite(item.lng))
+        .map(item => [item.lat, item.lng]);
 
-        const count = Number(row.count || 0);
-        if (count <= 0) return;
-
-        const label = L.marker(
-            [row.lat, row.lng],
-            {
-                icon: L.divIcon({
-                    className: "district-count-label",
-                    html: `
-                        <div style="
-                            background:rgba(255,255,255,0.94);
-                            color:#111827;
-                            border:2px solid #374151;
-                            border-radius:50%;
-                            min-width:42px;
-                            height:42px;
-                            padding:0 5px;
-                            display:flex;
-                            align-items:center;
-                            justify-content:center;
-                            box-sizing:border-box;
-                            font:800 10px/1 Arial,sans-serif;
-                            text-align:center;
-                            box-shadow:0 2px 7px rgba(0,0,0,.28);
-                            cursor:pointer;
-                        ">
-                            ${count.toLocaleString()}
-                        </div>
-                    `,
-                    iconSize: [52, 52],
-                    iconAnchor: [26, 26]
-                }),
-                zIndexOffset: 2000,
-                interactive: true
-            }
-        );
-
-        label.bindTooltip(
-            `<b>${row.name || "District"}</b><br>` +
-            `<b>Incidents:</b> ${count.toLocaleString()}`,
-            {
-                sticky: true,
-                direction: "top",
-                opacity: 0.95,
-                className: "custom-tooltip"
-            }
-        );
-
-        label.on("click", () => {
-            window.parent.postMessage(
-                {
-                    type: "mapClick",
-                    state: row.name,
-                    municipality: city,
-                    lat: row.lat,
-                    long: row.lng
-                },
-                "*"
-            );
-        });
-
-        labels.addLayer(label);
-    });
-
-    return labels;
+    if (!points.length) return;
+    const bounds = L.latLngBounds(points);
+    if (bounds.isValid()) map.fitBounds(bounds, { padding, maxZoom });
 }
+
 
 function showMunicipalityOverview() {
     drillLevel = 0;
@@ -6033,51 +5629,37 @@ function showMunicipalityOverview() {
     selectedSubCluster = null;
     currentClusters = [];
 
-    clearDrillVisuals();
+    const municipalities = CITIES.map(city => ({
+        city,
+        count: municipalityTotals[city] || 0,
+        lat: municipalityCenters[city]?.lat,
+        lng: municipalityCenters[city]?.long
+    }));
 
-    if (window.overviewDistrictLabels) {
-        map.removeLayer(window.overviewDistrictLabels);
-        window.overviewDistrictLabels = null;
-    }
-
-    refreshMunicipalityHeatFills();
-
-    window.overviewDistrictLabels =
-        createOverviewDistrictLabels();
-
-    window.overviewDistrictLabels.addTo(map);
+    renderHeatLevel(
+        municipalities,
+        item => item.city,
+        item => () => showMunicipality(item.city),
+        82
+    );
 
     CITIES.forEach(city => {
         const boundary = municipalityBoundaryLayers[city];
-
         if (!boundary) return;
-
         boundary.off("click");
         boundary.on("click", () => showMunicipality(city));
     });
 
-    const boundaries = CITIES
-        .map(city => municipalityBoundaryLayers[city])
-        .filter(Boolean);
-
+    const boundaries = CITIES.map(city => municipalityBoundaryLayers[city]).filter(Boolean);
     if (boundaries.length) {
-        const bounds =
-            L.featureGroup(boundaries).getBounds();
-
-        if (bounds.isValid()) {
-            map.fitBounds(
-                bounds,
-                { padding: [30, 30] }
-            );
-        }
+        const bounds = L.featureGroup(boundaries).getBounds();
+        if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30] });
     }
 
-    updateMapInfo(
-        "LEVEL 1 — Municipalities • Dammam RED • Khobar YELLOW • Dhahran GREEN"
-    );
-
+    updateMapInfo("Municipalities — click a municipality or its count label");
     updateBackButton();
 }
+
 
 function showMunicipality(city) {
     selectedMunicipality = city;
@@ -6085,190 +5667,70 @@ function showMunicipality(city) {
     selectedSubCluster = null;
     drillLevel = 1;
 
-    clearDrillVisuals();
-
-    const rows =
-        prepareRows(
-            municipalityIncidentRows[city] || [],
-            city
-        );
-
-    if (!rows.length) {
-        updateMapInfo(
-            `<b>${city}</b> — No incident data`
-        );
-        updateBackButton();
-        return;
-    }
-
+    const rows = prepareRows(municipalityIncidentRows[city] || [], city);
     currentClusters = createClusters(rows);
 
-    /* Exactly 3 geographic groups, in fixed color order. */
-    const groupStats =
-        calculateLayerRisk(currentClusters);
-
-    window.drillShapeLayer =
-        L.layerGroup().addTo(map);
-
-    currentClusters.forEach(cluster => {
-        const layer =
-            createGeographicGroupLayer(
-                cluster,
-                city,
-                groupStats
-            );
-
-        if (layer) {
-            window.drillShapeLayer.addLayer(layer);
-        }
-    });
-
-    window.drillLabelLayer =
-        createGroupLabels(currentClusters);
-
-    window.drillLabelLayer.addTo(map);
-
-    const boundary =
-        municipalityBoundaryLayers[city];
-
-    if (boundary && boundary.getBounds().isValid()) {
-        map.fitBounds(
-            boundary.getBounds(),
-            {
-                padding: [70, 70],
-                maxZoom: 13
-            }
-        );
-    }
-
-    updateMapInfo(
-        `<b>${city}</b> — LEVEL 2: 3 geographic groups ` +
-        `(RED • YELLOW • GREEN). Click any group to view districts.`
+    renderHeatLevel(
+        currentClusters,
+        item => `Group ${item.index + 1}`,
+        item => () => showSecondLevel(item, city),
+        62
     );
 
+    const boundary = municipalityBoundaryLayers[city];
+    if (boundary && boundary.getBounds().isValid()) {
+        map.fitBounds(boundary.getBounds(), { padding: [70, 70], maxZoom: 13 });
+    }
+
+    updateMapInfo(`<b>${city}</b> — 3 heat groups; click a group label`);
     updateBackButton();
 }
 
-function showDistrictLevel(cluster, city) {
+
+function showSecondLevel(cluster, city) {
     selectedCluster = cluster;
     selectedSubCluster = null;
-    drillLevel = 3;
+    drillLevel = 2;
 
-    clearDrillVisuals();
+    currentClusters = createClusters(cluster.items || []);
 
-    const rows =
-        cluster.items || [];
-
-    if (!rows.length) {
-        updateMapInfo(
-            `${city} → No districts`
-        );
-        updateBackButton();
-        return;
-    }
-
-    /*
-       LEVEL 3:
-       Direct districts — NO sub-group.
-       Each real district polygon gets a shade based
-       on the incident count within this selected group.
-    */
-
-    window.drillShapeLayer =
-        createDistrictLevelLayer(
-            rows,
-            city
-        );
-
-    if (window.drillShapeLayer) {
-        window.drillShapeLayer.addTo(map);
-    }
-
-    window.drillLabelLayer =
-        createDistrictCountLabels(
-            rows,
-            city
-        );
-
-    window.drillLabelLayer.addTo(map);
-
-    const points =
-        rows.filter(
-            row =>
-                Number.isFinite(row.lat) &&
-                Number.isFinite(row.lng)
-        );
-
-    if (points.length) {
-        const bounds =
-            L.latLngBounds(
-                points.map(
-                    row => [row.lat, row.lng]
-                )
-            );
-
-        if (bounds.isValid()) {
-            map.fitBounds(
-                bounds,
-                {
-                    padding: [90, 90],
-                    maxZoom: 17
-                }
-            );
-        }
-    }
-
-    updateMapInfo(
-        `<b>${city}</b> → Group ${cluster.index + 1} → ` +
-        `<b>LEVEL 3: Districts</b> — ` +
-        `district color is based on incident count`
+    renderHeatLevel(
+        currentClusters,
+        item => `Sub-group ${item.index + 1}`,
+        item => () => showDistrictLevel(item, city),
+        52
     );
 
+    fitToItems(cluster.items, [100, 100], 15);
+    updateMapInfo(`<b>${city}</b> — Group ${cluster.index + 1}; click a sub-group label`);
     updateBackButton();
 }
 
-function handleBack() {
-    /*
-       LEVEL 3 Districts → LEVEL 2 Groups
-    */
-    if (drillLevel === 3) {
-        if (selectedMunicipality) {
-            showMunicipality(selectedMunicipality);
-        }
-        return;
-    }
 
-    /*
-       LEVEL 2 Groups → LEVEL 1 Municipalities
-    */
-    if (drillLevel === 1) {
-        showMunicipalityOverview();
-        return;
-    }
+function showDistrictLevel(cluster, city) {
+    selectedSubCluster = cluster;
+    drillLevel = 3;
 
-    showMunicipalityOverview();
+    const rows = cluster.items || [];
+    renderHeatLevel(
+        rows,
+        item => item.name || "District",
+        item => () => {
+            window.parent.postMessage({
+                type: "mapClick",
+                state: item.name,
+                municipality: city,
+                lat: item.lat,
+                long: item.lng
+            }, "*");
+        },
+        42
+    );
+
+    fitToItems(rows, [90, 90], 17);
+    updateMapInfo(`<b>${city}</b> — districts; click a district label to filter Grafana`);
+    updateBackButton();
 }
-
-function updateBackButton() {
-    const button =
-        document.querySelector(".map-back-button");
-
-    if (!button) return;
-
-    if (drillLevel === 0) {
-        button.style.display = "none";
-        return;
-    }
-
-    button.style.display = "block";
-
-    if (drillLevel === 1) {
-        button.innerHTML = "← Municipalities";
-    } else {
-        button.innerHTML = "← Groups";
-    }
-}
-
 /* =========================================================
    APPLY GRAFANA DATA
    ========================================================= */
@@ -6793,6 +6255,511 @@ window.addEventListener(
 );
 
 </script>
+
+
+
+<script>
+/* =========================================================
+   FINAL 3-LEVEL ACTUAL-SHAPE MAP OVERRIDE
+
+   Level 1 = Municipalities + actual district polygons
+   Level 2 = 3 actual-shape Groups inside municipality
+   Level 3 = direct Districts inside selected Group
+
+   No Sub-Group level.
+   No artificial circles for geographic areas.
+   ========================================================= */
+
+(function(){
+
+    const FINAL_PALETTE = {
+        Dammam:  { light:'#fecaca', mid:'#ef4444', dark:'#991b1b', border:'#7f1d1d' },
+        Khobar:  { light:'#fef3c7', mid:'#facc15', dark:'#a16207', border:'#854d0e' },
+        Dhahran: { light:'#bbf7d0', mid:'#22c55e', dark:'#166534', border:'#14532d' }
+    };
+
+    let finalShapeLayer = L.layerGroup().addTo(map);
+    let finalLabelLayer = L.layerGroup().addTo(map);
+
+    function removeFinalLayers(){
+        finalShapeLayer.clearLayers();
+        finalLabelLayer.clearLayers();
+    }
+
+    function hideOriginalDistrictLayers(){
+        Object.keys(districtLayers).forEach(name => {
+            const layer = districtLayers[name];
+            if(layer && map.hasLayer(layer)) map.removeLayer(layer);
+        });
+    }
+
+    function showOriginalDistrictLayers(names){
+        (names || []).forEach(name => {
+            const layer = districtLayers[name];
+            if(layer) map.addLayer(layer);
+        });
+    }
+
+    function palette(city){
+        return FINAL_PALETTE[city] || FINAL_PALETTE.Dammam;
+    }
+
+    function colorForCount(count, stats, city){
+        const p = palette(city);
+        const n = Number(count || 0);
+        if(!n) return '#94a3b8';
+        if(!stats || stats.max <= 0) return p.light;
+        if(stats.max === stats.min) return p.dark;
+        if(n >= stats.highLimit) return p.dark;
+        if(n >= stats.lowLimit) return p.mid;
+        return p.light;
+    }
+
+    function riskForCount(count, stats){
+        const n = Number(count || 0);
+        if(!n) return 'No Data';
+        if(!stats || stats.max <= 0) return 'Low';
+        if(stats.max === stats.min) return 'High';
+        if(n >= stats.highLimit) return 'High';
+        if(n >= stats.lowLimit) return 'Medium';
+        return 'Low';
+    }
+
+    function districtStats(rows){
+        return calculateLayerRisk(rows || []);
+    }
+
+    function addCountLabel(row, city, showName){
+        if(!Number.isFinite(row.lat) || !Number.isFinite(row.lng)) return;
+        const count = Number(row.count || 0);
+        if(count <= 0) return;
+
+        const html = showName
+            ? `<div class="final-district-label"><b>${row.name || 'District'}</b><span>${count.toLocaleString()}</span></div>`
+            : `<div class="final-count-label">${count.toLocaleString()}</div>`;
+
+        const icon = L.divIcon({
+            className:'final-label-icon',
+            html,
+            iconSize: showName ? [118,42] : [64,34],
+            iconAnchor: showName ? [59,21] : [32,17]
+        });
+
+        const marker = L.marker([row.lat,row.lng], {
+            icon,
+            zIndexOffset:4000,
+            interactive:true
+        });
+
+        marker.bindTooltip(
+            districtTooltipHtml(
+                row.name || 'District',
+                city,
+                count,
+                {level:'Incident', color: colorForCount(count,districtStats(municipalityIncidentRows[city]),city)}
+            ),
+            {sticky:true,direction:'top',opacity:0.95,className:'custom-tooltip'}
+        );
+
+        marker.on('click',()=>{
+            window.parent.postMessage({
+                type:'mapClick',
+                state:row.name,
+                municipality:city,
+                lat:row.lat,
+                long:row.lng
+            },'*');
+        });
+
+        finalLabelLayer.addLayer(marker);
+    }
+
+    function styleDistrict(name, city, stats, opacity){
+        const count = getDistrictCount(name);
+        const fill = colorForCount(count,stats,city);
+        return {
+            color:'#ffffff',
+            weight:1.2,
+            opacity:0.92,
+            fillColor:fill,
+            fillOpacity: opacity == null ? 0.68 : opacity
+        };
+    }
+
+    function addDistrictPolygon(name, city, stats, opacity){
+        const original = districtLayers[name];
+        if(!original) return;
+
+        const clone = L.geoJSON(original.toGeoJSON(), {
+            style:()=>styleDistrict(name,city,stats,opacity),
+            interactive:true
+        });
+
+        clone.bindTooltip(
+            districtTooltipHtml(
+                name,
+                city,
+                getDistrictCount(name),
+                {
+                    level:riskForCount(getDistrictCount(name),stats),
+                    color:colorForCount(getDistrictCount(name),stats,city)
+                }
+            ),
+            {sticky:true,direction:'top',opacity:0.95,className:'custom-tooltip'}
+        );
+
+        clone.on('mouseover',e=>{
+            e.layer.setStyle({weight:2.5,fillOpacity:0.82});
+            e.layer.bringToFront();
+        });
+
+        clone.on('mouseout',e=>{
+            e.layer.setStyle(styleDistrict(name,city,stats,opacity));
+        });
+
+        clone.on('click',()=>{
+            const d=districtCounts[name];
+            window.parent.postMessage({
+                type:'mapClick',
+                state:name,
+                municipality:city,
+                lat:d ? d.lat : null,
+                long:d ? d.long : null
+            },'*');
+        });
+
+        finalShapeLayer.addLayer(clone);
+    }
+
+    function rowsForCity(city){
+        return prepareRows(municipalityIncidentRows[city] || [],city)
+            .filter(r=>r && r.name);
+    }
+
+    function districtNamesForRows(rows){
+        return [...new Set((rows||[]).map(r=>r.name).filter(Boolean))];
+    }
+
+    function addMunicipalityBoundary(city){
+        const boundary=municipalityBoundaryLayers[city];
+        if(!boundary) return;
+        const p=palette(city);
+        boundary.setStyle({
+            color:'#ffffff',
+            weight:2.5,
+            opacity:0.98,
+            fillColor:p.mid,
+            fillOpacity:0.04
+        });
+        if(!map.hasLayer(boundary)) map.addLayer(boundary);
+        boundary.bringToFront();
+    }
+
+    function clearMunicipalityBoundaries(){
+        CITIES.forEach(city=>{
+            const b=municipalityBoundaryLayers[city];
+            if(b && map.hasLayer(b)) map.removeLayer(b);
+        });
+    }
+
+    /* ---------------------------------------------------------
+       LEVEL 1 — ACTUAL DISTRICTS COLOURED INSIDE MUNICIPALITY
+       --------------------------------------------------------- */
+    window.showMunicipalityOverview = function(){
+        drillLevel=0;
+        selectedMunicipality=null;
+        selectedCluster=null;
+        selectedSubCluster=null;
+        currentClusters=[];
+
+        if(typeof clearBubbleLayer==='function') clearBubbleLayer();
+        if(typeof clearHeatVisuals==='function') clearHeatVisuals();
+        removeFinalLayers();
+        hideOriginalDistrictLayers();
+        clearMunicipalityBoundaries();
+
+        CITIES.forEach(city=>{
+            const rows=rowsForCity(city);
+            const stats=districtStats(rows);
+            const names=districtNamesForRows(rows);
+
+            names.forEach(name=>addDistrictPolygon(name,city,stats,0.72));
+
+            rows.forEach(row=>addCountLabel(row,city,false));
+
+            addMunicipalityBoundary(city);
+        });
+
+        const boundaries=CITIES.map(c=>municipalityBoundaryLayers[c]).filter(Boolean);
+        if(boundaries.length){
+            const b=L.featureGroup(boundaries).getBounds();
+            if(b.isValid()) map.fitBounds(b,{padding:[30,30]});
+        }
+
+        updateMapInfo('Municipalities — click Dammam, Khobar or Dhahran to view 3 Groups');
+        updateBackButton();
+    };
+
+    /* ---------------------------------------------------------
+       LEVEL 2 — THREE ACTUAL-SHAPE GROUPS
+       Group 1 = RED
+       Group 2 = YELLOW
+       Group 3 = GREEN
+       --------------------------------------------------------- */
+    window.showMunicipality = function(city){
+        selectedMunicipality=city;
+        selectedCluster=null;
+        selectedSubCluster=null;
+        drillLevel=1;
+
+        if(typeof clearBubbleLayer==='function') clearBubbleLayer();
+        if(typeof clearHeatVisuals==='function') clearHeatVisuals();
+        removeFinalLayers();
+        hideOriginalDistrictLayers();
+        clearMunicipalityBoundaries();
+
+        const rows=rowsForCity(city);
+        currentClusters=createClusters(rows);
+
+        const p=palette(city);
+        const groupColors=[
+            {light:'#fecaca',mid:'#ef4444',dark:'#991b1b',border:'#7f1d1d'},
+            {light:'#fef3c7',mid:'#facc15',dark:'#a16207',border:'#854d0e'},
+            {light:'#bbf7d0',mid:'#22c55e',dark:'#166534',border:'#14532d'}
+        ];
+
+        currentClusters.forEach((cluster,index)=>{
+            const names=districtNamesForRows(cluster.items);
+            const colors=groupColors[index] || groupColors[2];
+            const stats=districtStats(cluster.items);
+
+            // Draw actual district polygons, but same group family.
+            names.forEach(name=>{
+                const original=districtLayers[name];
+                if(!original) return;
+
+                const layer=L.geoJSON(original.toGeoJSON(),{
+                    style:{
+                        color:'#ffffff',
+                        weight:1.0,
+                        opacity:0.95,
+                        fillColor:colors.mid,
+                        fillOpacity:0.78
+                    }
+                });
+
+                layer.on('mouseover',e=>e.layer.setStyle({weight:2.5,fillOpacity:0.90}));
+                layer.on('mouseout',e=>e.layer.setStyle({weight:1.0,fillOpacity:0.78}));
+                layer.on('click',()=>window.showDistrictLevel(cluster,city));
+                finalShapeLayer.addLayer(layer);
+            });
+
+            const center=getCentroid(cluster.items);
+            if(center){
+                const label=L.marker([center.lat,center.lng],{
+                    icon:L.divIcon({
+                        className:'final-group-label',
+                        html:`<div style="background:${colors.dark};">Group ${index+1}<span>${cluster.count.toLocaleString()}</span></div>`,
+                        iconSize:[132,58],
+                        iconAnchor:[66,29]
+                    }),
+                    zIndexOffset:5000
+                });
+                label.on('click',()=>window.showDistrictLevel(cluster,city));
+                finalLabelLayer.addLayer(label);
+            }
+        });
+
+        const boundary=municipalityBoundaryLayers[city];
+        if(boundary){
+            boundary.setStyle({color:'#ffffff',weight:2.5,opacity:1,fillOpacity:0});
+            map.addLayer(boundary);
+            boundary.bringToFront();
+        }
+
+        const points=rows.filter(r=>Number.isFinite(r.lat)&&Number.isFinite(r.lng));
+        if(points.length){
+            const bounds=L.latLngBounds(points.map(r=>[r.lat,r.lng]));
+            if(bounds.isValid()) map.fitBounds(bounds,{padding:[70,70],maxZoom:14});
+        }
+
+        updateMapInfo(`<b>${city}</b> — 3 Groups: 🔴 Group 1 • 🟡 Group 2 • 🟢 Group 3`);
+        updateBackButton();
+    };
+
+    /* ---------------------------------------------------------
+       LEVEL 3 — DIRECT DISTRICTS
+       NO SUB-GROUP
+       District count decides RED / YELLOW / GREEN
+       --------------------------------------------------------- */
+    window.showDistrictLevel = function(cluster,city){
+        selectedCluster=cluster;
+        selectedSubCluster=null;
+        drillLevel=2;
+
+        if(typeof clearBubbleLayer==='function') clearBubbleLayer();
+        if(typeof clearHeatVisuals==='function') clearHeatVisuals();
+        removeFinalLayers();
+        hideOriginalDistrictLayers();
+        clearMunicipalityBoundaries();
+
+        const rows=cluster.items || [];
+        const stats=districtStats(rows);
+
+        rows.forEach(row=>{
+            if(!row.name) return;
+            addDistrictPolygon(row.name,city,stats,0.76);
+            addCountLabel(row,city,true);
+        });
+
+        const points=rows.filter(r=>Number.isFinite(r.lat)&&Number.isFinite(r.lng));
+        if(points.length){
+            const bounds=L.latLngBounds(points.map(r=>[r.lat,r.lng]));
+            if(bounds.isValid()) map.fitBounds(bounds,{padding:[65,65],maxZoom:16});
+        }
+
+        updateMapInfo(`<b>${city}</b> — Direct Districts • 🟢 Low • 🟡 Medium • 🔴 High (based on count)`);
+        updateBackButton();
+    };
+
+    /* ---------------------------------------------------------
+       BACK BUTTON — 0 -> 1 -> 2
+       --------------------------------------------------------- */
+    window.updateBackButton = function(){
+        const button=document.getElementById('back-button') || document.querySelector('.back-button');
+        if(!button) return;
+
+        if(drillLevel===0){
+            button.style.display='none';
+        } else {
+            button.style.display='block';
+            button.innerHTML=drillLevel===1 ? '← Municipalities' : '← Groups';
+        }
+    };
+
+    window.handleBack = function(){
+        if(drillLevel===2){
+            showMunicipality(selectedMunicipality);
+        } else if(drillLevel===1){
+            showMunicipalityOverview();
+        } else {
+            showMunicipalityOverview();
+        }
+    };
+
+    // Try to attach to an existing Back button.
+    function wireBackButton(){
+        const candidates=document.querySelectorAll('button, .back-button, [id*=back i]');
+        candidates.forEach(btn=>{
+            if((btn.textContent||'').toLowerCase().includes('back')){
+                btn.onclick=handleBack;
+            }
+        });
+    }
+
+    /* ---------------------------------------------------------
+       SATELLITE BACKGROUND
+       --------------------------------------------------------- */
+    try{
+        if(typeof osm!=='undefined' && map.hasLayer(osm)) map.removeLayer(osm);
+    }catch(e){}
+
+    const finalSatellite=L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        {attribution:'Esri World Imagery',maxZoom:19}
+    ).addTo(map);
+
+    // Put satellite below vector overlays.
+    if(map.getPane('tilePane')) map.getPane('tilePane').style.zIndex=200;
+
+    // The original initialization happens asynchronously.
+    // Re-run our intended overview after all source data is ready.
+    const originalApplyIncidentData=window.applyIncidentData;
+    if(typeof originalApplyIncidentData==='function'){
+        // Function is already used by existing listeners; no replacement needed.
+    }
+
+    setTimeout(()=>{
+        wireBackButton();
+        if(typeof mapReady!=='undefined' && mapReady){
+            showMunicipalityOverview();
+        }
+    },1200);
+
+    // Keep our level functions after any source redraw.
+    setTimeout(wireBackButton,1800);
+
+})();
+
+</script>
+
+<style>
+.final-label-icon, .final-group-label {
+    background:transparent !important;
+    border:none !important;
+}
+
+.final-count-label {
+    width:64px;
+    height:34px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    box-sizing:border-box;
+    border-radius:50%;
+    background:rgba(255,255,255,.94);
+    border:2px solid rgba(30,30,30,.75);
+    color:#111827;
+    font:800 13px Arial,sans-serif;
+    box-shadow:0 2px 8px rgba(0,0,0,.35);
+}
+
+.final-district-label {
+    width:118px;
+    min-height:42px;
+    padding:4px 7px;
+    box-sizing:border-box;
+    border-radius:7px;
+    background:rgba(0,0,0,.76);
+    color:#fff;
+    text-align:center;
+    font:700 11px Arial,sans-serif;
+    border:1px solid rgba(255,255,255,.7);
+    box-shadow:0 2px 8px rgba(0,0,0,.35);
+}
+
+.final-district-label b {
+    display:block;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.final-district-label span {
+    display:block;
+    font-size:14px;
+    margin-top:2px;
+}
+
+.final-group-label > div {
+    width:132px;
+    min-height:58px;
+    box-sizing:border-box;
+    border-radius:7px;
+    border:1px solid rgba(255,255,255,.8);
+    color:white;
+    text-align:center;
+    padding:7px 8px;
+    font:800 16px Arial,sans-serif;
+    box-shadow:0 3px 10px rgba(0,0,0,.45);
+}
+
+.final-group-label span {
+    display:block;
+    margin-top:2px;
+    font-size:18px;
+}
+</style>
 
 </body>
 
