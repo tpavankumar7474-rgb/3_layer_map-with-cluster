@@ -7080,145 +7080,821 @@ window.addEventListener(
 
     /* ======================================================
        LEVEL 2
-       3 GROUPS — RED / YELLOW / GREEN
+       THREE SPATIAL GROUPS — RED / YELLOW / GREEN
+
+       IMPORTANT:
+       - Groups are made from the REAL DISTRICT GEOMETRIES.
+       - Districts are first ordered spatially around the
+         municipality centroid.
+       - The ordered districts are split into 3 CONTIGUOUS
+         spatial sections.
+       - We DO NOT use round-robin assignment (which creates
+         scattered pieces).
+       - Each section is dissolved into one visual region.
+       - A smooth heat layer is placed on top using the
+         actual district counts.
        ====================================================== */
-    function level2(c){
-        level=1; city=c; group=null;
-        clear(); hideOldHeat(); hideOldDistricts();
 
-        const rs=rows(c);
-        let groups;
-        if(typeof createClusters==='function') groups=createClusters(rs);
-        else groups=[];
+    function spatialThreeGroups(rs){
 
-        // Always exactly three groups where data exists.
-        groups=groups.slice(0,3);
-
-        const palettes=[P.Dammam,P.Khobar,P.Dhahran];
-        const names=['Group 1','Group 2','Group 3'];
-
-        groups.forEach(function(g,i){
-            const p=palettes[i];
-            const items=g.items||[];
-            const total=items.reduce((s,r)=>s+num(r.count),0);
-            const id='grpGradient_'+i+'_'+Date.now();
-
-            // Use the real district geometries, but remove internal borders.
-            items.forEach(function(r){
-                const original=districtLayers[r.name];
-                if(!original) return;
-                const poly=L.geoJSON(original.toGeoJSON(),{
-                    style:{
-                        color:'transparent',
-                        weight:0,
-                        opacity:0,
-                        fillColor:p.mid,
-                        fillOpacity:.82
-                    }
-                });
-                poly.on('click',function(){level3(g,c);});
-                poly.on('mouseover',function(e){e.layer.setStyle({fillOpacity:.9});});
-                poly.on('mouseout',function(e){e.layer.setStyle({fillOpacity:.82});});
-                shape.addLayer(poly);
-                setTimeout(function(){
-                    if(gradient(id,p,Math.min(1,total/Math.max(1,num(municipalityTotals[c]))))) paint(poly,id);
-                },120);
-            });
-
-            const ctr=centerOf(items);
-            if(ctr) addNumber(ctr.lat,ctr.lng,total,true);
+        const valid=rs.filter(function(r){
+            return r &&
+                r.name &&
+                Number.isFinite(r.lat) &&
+                Number.isFinite(r.lng);
         });
 
-        // Draw group boundaries using convex hull-like visual outlines from
-        // the actual district points. No artificial data points are created.
-        groups.forEach(function(g,i){
-            const pts=(g.items||[]).filter(r=>Number.isFinite(r.lat)&&Number.isFinite(r.lng)).map(r=>[r.lng,r.lat]);
-            if(pts.length>=3 && typeof turf!=='undefined'){
-                const fc=turf.featureCollection(pts.map(x=>turf.point(x)));
-                const hull=turf.convexHull(fc);
-                if(hull){
-                    const p=palettes[i];
-                    const outline=L.geoJSON(hull,{style:{color:'#ffffff',weight:2,fillOpacity:0,opacity:.95}});
-                    outline.on('click',function(){level3(g,c);});
-                    shape.addLayer(outline);
-                }
+        if(valid.length<=3){
+            return valid.map(function(r,i){
+                return [r];
+            });
+        }
+
+        const c=centerOf(valid);
+
+        if(!c){
+            const n=Math.ceil(valid.length/3);
+            return [
+                valid.slice(0,n),
+                valid.slice(n,2*n),
+                valid.slice(2*n)
+            ].filter(x=>x.length);
+        }
+
+        const sorted=[...valid].sort(function(a,b){
+
+            const aa=Math.atan2(
+                a.lat-c.lat,
+                a.lng-c.lng
+            );
+
+            const ab=Math.atan2(
+                b.lat-c.lat,
+                b.lng-c.lng
+            );
+
+            return aa-ab;
+        });
+
+        /*
+          Rotate the array so the first group is the
+          northern/top area. This gives the same visual
+          orientation as the reference.
+        */
+        let northIndex=0;
+        let northScore=-Infinity;
+
+        sorted.forEach(function(r,i){
+            const score=r.lat;
+            if(score>northScore){
+                northScore=score;
+                northIndex=i;
             }
         });
 
-        const boundary=municipalityBoundary(c);
-        if(boundary){
-            const outline=L.geoJSON(boundary.toGeoJSON(),{style:{color:'#ffffff',weight:2.5,fillOpacity:0,opacity:1}});
-            shape.addLayer(outline);
+        const rotated=
+            sorted.slice(northIndex)
+            .concat(sorted.slice(0,northIndex));
+
+        const total=rotated.length;
+        const n1=Math.ceil(total/3);
+        const n2=Math.ceil((total-n1)/2);
+
+        return [
+            rotated.slice(0,n1),
+            rotated.slice(n1,n1+n2),
+            rotated.slice(n1+n2)
+        ].filter(function(x){
+            return x.length;
+        });
+    }
+
+
+    function groupPalette(i){
+        return [
+            P.Dammam,
+            P.Khobar,
+            P.Dhahran
+        ][i];
+    }
+
+
+    /*
+      Leaflet.heat gradient for ONE GROUP.
+
+      Low intensity = light shade
+      Medium intensity = medium shade
+      High intensity = dark shade
+
+      This produces the smooth weather-map appearance
+      visible in the reference video.
+    */
+    function groupHeatGradient(p){
+
+        return {
+            0.05:p.light,
+            0.20:p.light,
+            0.38:p.mid,
+            0.58:p.mid,
+            0.76:p.dark,
+            0.90:p.dark,
+            1.00:p.dark
+        };
+    }
+
+
+    function addGroupHeat(items,p,index){
+
+        const points=items
+            .filter(function(r){
+                return Number.isFinite(r.lat) &&
+                       Number.isFinite(r.lng) &&
+                       num(r.count)>0;
+            })
+            .map(function(r){
+                return [
+                    r.lat,
+                    r.lng,
+                    Math.max(
+                        0.08,
+                        num(r.count)
+                    )
+                ];
+            });
+
+        if(!points.length){
+            return null;
         }
 
-        const points=rs.filter(r=>Number.isFinite(r.lat)&&Number.isFinite(r.lng));
-        if(points.length){
-            const bb=L.latLngBounds(points.map(r=>[r.lat,r.lng]));
-            if(bb.isValid()) map.fitBounds(bb,{padding:[45,45],maxZoom:13});
+        /*
+          Normalize to the selected group's own maximum.
+          This makes the dark/light pattern respond to
+          actual incident counts.
+        */
+        const mx=Math.max.apply(
+            null,
+            points.map(x=>x[2])
+        );
+
+        const normalized=points.map(function(x){
+            return [
+                x[0],
+                x[1],
+                x[2]/Math.max(1,mx)
+            ];
+        });
+
+        const heat=L.heatLayer(
+            normalized,
+            {
+                radius:62,
+                blur:48,
+                maxZoom:16,
+                minOpacity:0.30,
+                maxOpacity:0.88,
+                gradient:groupHeatGradient(p)
+            }
+        );
+
+        shape.addLayer(heat);
+
+        return heat;
+    }
+
+
+    /*
+      Build a dissolved visual boundary from the actual
+      district polygons. This is NOT a fake convex hull.
+    */
+    function dissolvedGroupFeature(items){
+
+        const features=[];
+
+        items.forEach(function(r){
+
+            const original=
+                districtLayers[r.name];
+
+            if(!original) return;
+
+            try{
+                const gj=
+                    original.toGeoJSON();
+
+                if(gj && gj.features){
+                    gj.features.forEach(function(f){
+                        features.push(f);
+                    });
+                }else if(gj){
+                    features.push(gj);
+                }
+            }catch(e){}
+        });
+
+        if(!features.length){
+            return null;
         }
-        updateInfo('LEVEL 2 — '+c+' Groups | 🔴 Group 1  •  🟡 Group 2  •  🟢 Group 3');
+
+        try{
+
+            const fc=
+                turf.featureCollection(
+                    features
+                );
+
+            /*
+              Turf v7 accepts a FeatureCollection
+              for union().
+            */
+            const merged=
+                turf.union(fc);
+
+            return merged || fc;
+
+        }catch(e){
+
+            /*
+              If union fails because of an unusual
+              MultiPolygon, fall back to a FeatureCollection.
+            */
+            return turf.featureCollection(features);
+        }
+    }
+
+
+    /* ======================================================
+       LEVEL 2
+       ====================================================== */
+
+    function level2(c){
+
+        level=1;
+        city=c;
+        group=null;
+
+        clear();
+        hideOldHeat();
+        hideOldDistricts();
+
+        const rs=rows(c);
+
+        if(!rs.length){
+
+            updateInfo(
+                'LEVEL 2 — '+c+
+                ' | No district incident data'
+            );
+
+            backButton();
+            return;
+        }
+
+        /*
+          Spatially contiguous 3 groups.
+        */
+        const groups=
+            spatialThreeGroups(rs);
+
+        const names=[
+            'Group 1',
+            'Group 2',
+            'Group 3'
+        ];
+
+        groups.slice(0,3).forEach(function(items,i){
+
+            const p=
+                groupPalette(i);
+
+            const total=
+                items.reduce(
+                    function(s,r){
+                        return s+num(r.count);
+                    },
+                    0
+                );
+
+            /*
+              Draw the REAL group shape first.
+            */
+            const feature=
+                dissolvedGroupFeature(items);
+
+            let groupLayer=null;
+
+            if(feature){
+
+                groupLayer=
+                    L.geoJSON(
+                        feature,
+                        {
+                            style:{
+                                color:'#ffffff',
+                                weight:2.2,
+                                opacity:1,
+
+                                /*
+                                  Light base.
+                                  The heat layer creates the
+                                  dark/medium/light variation.
+                                */
+                                fillColor:p.light,
+                                fillOpacity:0.48
+                            }
+                        }
+                    );
+
+                groupLayer.on(
+                    'click',
+                    function(){
+                        level3(
+                            {
+                                items:items,
+                                count:total,
+                                index:i
+                            },
+                            c
+                        );
+                    }
+                );
+
+                groupLayer.on(
+                    'mouseover',
+                    function(e){
+                        if(e.layer &&
+                           e.layer.setStyle){
+                            e.layer.setStyle({
+                                weight:3,
+                                fillOpacity:0.58
+                            });
+                        }
+                    }
+                );
+
+                groupLayer.on(
+                    'mouseout',
+                    function(e){
+                        if(e.layer &&
+                           e.layer.setStyle){
+                            e.layer.setStyle({
+                                weight:2.2,
+                                fillOpacity:0.48
+                            });
+                        }
+                    }
+                );
+
+                bindTooltip(
+                    groupLayer,
+                    names[i],
+                    total,
+                    total,
+                    'Group',
+                    names[i]
+                );
+
+                shape.addLayer(
+                    groupLayer
+                );
+            }
+
+
+            /*
+              Actual count-based heat spots inside the
+              group. This is the part that makes the map
+              look like the reference heat map instead of
+              flat red/yellow/green polygons.
+            */
+            addGroupHeat(
+                items,
+                p,
+                i
+            );
+
+
+            /*
+              Number only — no black information box.
+            */
+            const ctr=
+                centerOf(items);
+
+            if(ctr){
+
+                addNumber(
+                    ctr.lat,
+                    ctr.lng,
+                    total,
+                    true
+                );
+            }
+
+        });
+
+
+        /*
+          Municipality outline stays visible.
+        */
+        const boundary=
+            municipalityBoundary(c);
+
+        if(boundary){
+
+            const outline=
+                L.geoJSON(
+                    boundary.toGeoJSON(),
+                    {
+                        style:{
+                            color:'#ffffff',
+                            weight:2.8,
+                            opacity:1,
+                            fillOpacity:0
+                        }
+                    }
+                );
+
+            shape.addLayer(
+                outline
+            );
+        }
+
+
+        const points=
+            rs.filter(function(r){
+                return Number.isFinite(r.lat) &&
+                       Number.isFinite(r.lng);
+            });
+
+        if(points.length){
+
+            const bb=
+                L.latLngBounds(
+                    points.map(function(r){
+                        return [
+                            r.lat,
+                            r.lng
+                        ];
+                    })
+                );
+
+            if(bb.isValid()){
+
+                map.fitBounds(
+                    bb,
+                    {
+                        padding:[40,40],
+                        maxZoom:13
+                    }
+                );
+            }
+        }
+
+        updateInfo(
+            'LEVEL 2 — '+c+
+            ' | Group 1 🔴  •  Group 2 🟡  •  Group 3 🟢'
+        );
+
         backButton();
     }
 
+
     /* ======================================================
        LEVEL 3
-       DIRECT DISTRICTS — COUNT BASED RED/YELLOW/GREEN
+       DIRECT DISTRICTS
+       COUNT BASED RED / YELLOW / GREEN
        ====================================================== */
+
+    function districtHeatGradient(){
+
+        return {
+
+            /*
+              Smooth continuous weather colours.
+            */
+            0.05:'#3b82f6',
+            0.15:'#06b6d4',
+            0.30:'#22c55e',
+            0.45:'#84cc16',
+            0.60:'#facc15',
+            0.75:'#f59e0b',
+            0.88:'#ef4444',
+            1.00:'#b91c1c'
+        };
+    }
+
+
     function level3(g,c){
-        level=2; city=c; group=g;
-        clear(); hideOldHeat(); hideOldDistricts();
 
-        const rs=g.items||[];
-        const stats=riskStats(rs);
+        level=2;
+        city=c;
+        group=g;
 
+        clear();
+        hideOldHeat();
+        hideOldDistricts();
+
+        const rs=
+            (g && g.items)
+                ? g.items
+                : [];
+
+        if(!rs.length){
+
+            updateInfo(
+                'LEVEL 3 — '+c+
+                ' | No districts'
+            );
+
+            backButton();
+            return;
+        }
+
+        const stats=
+            riskStats(rs);
+
+
+        /*
+          Draw actual district polygons.
+        */
         rs.forEach(function(r){
-            const original=districtLayers[r.name];
-            if(!original) return;
 
-            const rr=risk(rs,r.count);
-            const p=RISK[rr];
-            const intensity=stats.max===stats.min?.7:(num(r.count)-stats.min)/Math.max(1,stats.max-stats.min);
-            const id='distGradient_'+String(r.name).replace(/[^a-zA-Z0-9]/g,'_')+'_'+Date.now();
+            const original=
+                districtLayers[r.name];
 
-            const poly=L.geoJSON(original.toGeoJSON(),{
-                style:{
-                    color:'#ffffff',
-                    weight:1.4,
-                    opacity:1,
-                    fillColor:p.mid,
-                    fillOpacity:.78
+            if(!original){
+                return;
+            }
+
+            const rr=
+                risk(rs,r.count);
+
+            const p=
+                RISK[rr];
+
+            /*
+              Base colour according to count ranking.
+            */
+            const poly=
+                L.geoJSON(
+                    original.toGeoJSON(),
+                    {
+                        style:{
+                            color:'#ffffff',
+                            weight:1.5,
+                            opacity:1,
+                            fillColor:p.mid,
+                            fillOpacity:0.38
+                        }
+                    }
+                );
+
+
+            poly.on(
+                'mouseover',
+                function(e){
+
+                    if(
+                        e.layer &&
+                        e.layer.setStyle
+                    ){
+
+                        e.layer.setStyle({
+                            weight:2.6,
+                            fillOpacity:0.48
+                        });
+
+                    }
+
                 }
-            });
+            );
 
-            poly.on('mouseover',function(e){e.layer.setStyle({weight:2.5,fillOpacity:.9});});
-            poly.on('mouseout',function(e){e.layer.setStyle({weight:1.4,fillOpacity:.78});});
-            poly.on('click',function(){
-                const d=districtCounts[r.name];
-                window.parent.postMessage({
-                    type:'mapClick',
-                    state:r.name,
-                    municipality:c,
-                    lat:d?d.lat:r.lat,
-                    long:d?d.long:r.lng
-                },'*');
-            });
-            bindTooltip(poly,r.name,num(r.count),num(r.count),'district',rr);
-            shape.addLayer(poly);
 
-            setTimeout(function(){
-                if(gradient(id,p,intensity)) paint(poly,id);
-            },120);
+            poly.on(
+                'mouseout',
+                function(e){
 
-            // Number only at actual district coordinate.
-            addNumber(r.lat,r.lng,num(r.count),false);
+                    if(
+                        e.layer &&
+                        e.layer.setStyle
+                    ){
+
+                        e.layer.setStyle({
+                            weight:1.5,
+                            fillOpacity:0.38
+                        });
+
+                    }
+
+                }
+            );
+
+
+            poly.on(
+                'click',
+                function(){
+
+                    const d=
+                        districtCounts[r.name];
+
+                    window.parent.postMessage(
+                        {
+                            type:'mapClick',
+                            state:r.name,
+                            municipality:c,
+                            lat:
+                                d
+                                    ? d.lat
+                                    : r.lat,
+                            long:
+                                d
+                                    ? d.long
+                                    : r.lng
+                        },
+                        '*'
+                    );
+
+                }
+            );
+
+
+            bindTooltip(
+                poly,
+                r.name,
+                num(r.count),
+                num(r.count),
+                'district',
+                rr
+            );
+
+
+            shape.addLayer(
+                poly
+            );
+
+
+            /*
+              District-specific smooth gradient.
+            */
+            const intensity=
+                stats.max===stats.min
+                    ? 0.70
+                    : (
+                        num(r.count)-stats.min
+                    ) /
+                    Math.max(
+                        1,
+                        stats.max-stats.min
+                    );
+
+
+            const id=
+                'districtHeat_'+
+                String(r.name)
+                    .replace(
+                        /[^a-zA-Z0-9]/g,
+                        '_'
+                    )+
+                '_'+
+                Date.now();
+
+
+            setTimeout(
+                function(){
+
+                    if(
+                        gradient(
+                            id,
+                            p,
+                            intensity
+                        )
+                    ){
+
+                        paint(
+                            poly,
+                            id
+                        );
+
+                    }
+
+                },
+                150
+            );
+
+
+            /*
+              Number only at actual district coordinate.
+            */
+            addNumber(
+                r.lat,
+                r.lng,
+                num(r.count),
+                false
+            );
+
         });
 
-        const pts=rs.filter(r=>Number.isFinite(r.lat)&&Number.isFinite(r.lng));
+
+        /*
+          Add a subtle count-driven heat layer over the
+          actual district locations.
+
+          Unlike Level 2, Level 3 uses the universal
+          blue -> cyan -> green -> yellow -> orange ->
+          red heat scale because the districts themselves
+          are being classified by count.
+        */
+        const pts=
+            rs.filter(function(r){
+                return Number.isFinite(r.lat) &&
+                       Number.isFinite(r.lng) &&
+                       num(r.count)>0;
+            });
+
+
         if(pts.length){
-            const bb=L.latLngBounds(pts.map(r=>[r.lat,r.lng]));
-            if(bb.isValid()) map.fitBounds(bb,{padding:[45,45],maxZoom:15});
+
+            const mx=
+                Math.max.apply(
+                    null,
+                    pts.map(function(r){
+                        return num(r.count);
+                    })
+                );
+
+
+            const heat=
+                L.heatLayer(
+                    pts.map(function(r){
+                        return [
+                            r.lat,
+                            r.lng,
+                            num(r.count) /
+                            Math.max(
+                                1,
+                                mx
+                            )
+                        ];
+                    }),
+                    {
+                        radius:52,
+                        blur:42,
+                        maxZoom:17,
+                        minOpacity:0.18,
+                        maxOpacity:0.62,
+                        gradient:
+                            districtHeatGradient()
+                    }
+                );
+
+
+            shape.addLayer(
+                heat
+            );
         }
-        updateInfo('LEVEL 3 — '+c+' / '+(g.index!=null?'Group '+(g.index+1):'Group')+' / Direct Districts | 🔴 High  🟡 Medium  🟢 Low');
+
+
+        const valid=
+            rs.filter(function(r){
+                return Number.isFinite(r.lat) &&
+                       Number.isFinite(r.lng);
+            });
+
+
+        if(valid.length){
+
+            const bb=
+                L.latLngBounds(
+                    valid.map(function(r){
+                        return [
+                            r.lat,
+                            r.lng
+                        ];
+                    })
+                );
+
+
+            if(bb.isValid()){
+
+                map.fitBounds(
+                    bb,
+                    {
+                        padding:[40,40],
+                        maxZoom:15
+                    }
+                );
+            }
+        }
+
+
+        updateInfo(
+            'LEVEL 3 — '+c+
+            ' / '+(
+                g.index!=null
+                    ? 'Group '+(g.index+1)
+                    : 'Group'
+            )+
+            ' / Districts | 🔴 High  🟡 Medium  🟢 Low'
+        );
+
         backButton();
     }
 
@@ -7242,8 +7918,8 @@ window.addEventListener(
                 const d=L.DomUtil.create('button','map-back-button');
                 d.type='button';
                 d.style.display='none';
-                d.onclick=function(){
-                    L.DomEvent.stopPropagation(event);
+                d.onclick=function(ev){
+                    L.DomEvent.stopPropagation(ev);
                     if(level===2) level2(city);
                     else if(level===1) level1();
                     else level1();
