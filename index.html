@@ -175,13 +175,33 @@ const map = L.map("map", {
     preferCanvas: true
 });
 
-L.tileLayer(
+const satelliteLayer = L.tileLayer(
     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     {
         attribution:"Tiles © Esri | OpenStreetMap contributors",
+        maxZoom:19,
+        crossOrigin:true
+    }
+);
+
+const streetLayer = L.tileLayer(
+    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    {
+        attribution:"© OpenStreetMap contributors",
         maxZoom:19
     }
-).addTo(map);
+);
+
+/* Satellite is the requested look. If Esri tiles fail, keep a usable
+   map by falling back to OpenStreetMap tiles. */
+satelliteLayer.on("tileerror", function(){
+    if(!map.hasLayer(streetLayer)){
+        console.warn("Satellite tiles unavailable; switching to OpenStreetMap.");
+        map.removeLayer(satelliteLayer);
+        streetLayer.addTo(map);
+    }
+});
+satelliteLayer.addTo(map);
 
 const CITIES = ["Dammam","Al Khobar","Dhahran"];
 
@@ -259,10 +279,13 @@ function fmt(v){
    ============================================================ */
 
 function validRow(r){
+    /* cleanRows() converts `long` -> `lng`, so validate the
+       normalized field. The previous version checked r.long here,
+       which removed EVERY query row and made the map appear blank. */
     return r &&
         String(r.state ?? "").trim() !== "" &&
         Number.isFinite(Number(r.lat)) &&
-        Number.isFinite(Number(r.long)) &&
+        Number.isFinite(Number(r.lng)) &&
         Number.isFinite(Number(r.count));
 }
 
@@ -1604,10 +1627,17 @@ window.addEventListener(
 
             console.log(
                 "Incident rows received:",
-                rawRows.length
+                rawRows.length,
+                event.data.data || []
             );
 
-            showLevel1();
+            if(!rawRows.length){
+                setHeader("LEVEL 1", "Municipalities Overview");
+                setInstruction("⚠ No valid query rows received. Check state / lat / long / count field names.");
+                updateStats("Query", 0, 0);
+            } else {
+                showLevel1();
+            }
         }
     }
 );
