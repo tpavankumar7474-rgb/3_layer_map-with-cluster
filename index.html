@@ -318,81 +318,160 @@ function cleanRows(rows){
    ============================================================ */
 
 async function loadGeoJSON(){
+    /* Load the SAME boundary files used by the original working map.
+       Municipality = municipality.geojson
+       Districts     = dammam.geojson / dhahran.geojson / khobar.geojson
+       Query counts still come only from Grafana. */
 
-    try{
-        const response = await fetch("./districts.geojson", {
-            cache:"no-store"
-        });
+    const files = [
+        {url:"./municipality.geojson", type:"municipality"},
+        {url:"./dammam.geojson", type:"Dammam"},
+        {url:"./dhahran.geojson", type:"Dhahran"},
+        {url:"./khobar.geojson", type:"Al Khobar"}
+    ];
 
-        if(!response.ok) throw new Error("districts.geojson not found");
-
-        const geo = await response.json();
-
-        districtFeatures = (geo.features || []).filter(f =>
-            f && f.geometry
-        );
-
-        buildGeoIndexes();
-
-        console.log(
-            "Loaded districts.geojson:",
-            districtFeatures.length,
-            "features"
-        );
-
-    }catch(err){
-
-        console.warn(
-            "districts.geojson unavailable. Using query-coordinate geometry.",
-            err
-        );
-
-        districtFeatures = [];
-        districtIndex = [];
-        cityIndex = [];
-    }
-}
-
-function buildGeoIndexes(){
-
+    municipalityFeatures = [];
+    districtFeatures = [];
     districtIndex = [];
     cityIndex = [];
 
-    districtFeatures.forEach(feature => {
+    const results = await Promise.all(
+        files.map(async item=>{
+            try{
+                const r = await fetch(item.url,{cache:"no-store"});
+                if(!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+                const json = await r.json();
+                return {item,json};
+            }catch(e){
+                console.warn("Boundary file unavailable:",item.url,e);
+                return {item,json:null};
+            }
+        })
+    );
 
-        const p = feature.properties || {};
+    results.forEach(({item,json})=>{
+        if(!json || !Array.isArray(json.features)) return;
 
-        const name =
-            String(
-                p.Name ??
-                p.name ??
-                p.NAME ??
-                p.District ??
-                p.DistrictName ??
-                ""
-            ).trim();
+        if(item.type === "municipality"){
+            municipalityFeatures.push(...json.features.filter(f=>f && f.geometry));
+        }else{
+            const city = item.type;
+            json.features.forEach(f=>{
+                if(!f || !f.geometry) return;
+                f.__mapCity = city;
+                districtFeatures.push(f);
+            });
+        }
+    });
 
-        const city =
-            normalizeCity(
-                p.City ??
-                p.city ??
-                p.Municipality ??
-                p.MunicipalityName ??
-                ""
-            );
+    buildGeoIndexes();
+    buildBoundaryLayerControl();
 
+    console.log("Municipality boundary features:",municipalityFeatures.length);
+    console.log("District boundary features:",districtFeatures.length);
+}
+
+function boundaryCityFromProperties(p, fallback=null){
+    const raw =
+        p.City ?? p.city ?? p.Municipality ?? p.MunicipalityName ??
+        p.Municipality_Name ?? p.MunicipalityNameEn ?? "";
+    return normalizeCity(raw) || fallback;
+}
+
+function boundaryName(p){
+    return String(
+        p.REMARKS ?? p.Name ?? p.name ?? p.NAME ??
+        p.NameEn ?? p.District ?? p.DistrictName ?? ""
+    ).trim();
+}
+
+function buildBoundaryLayerControl(){
+    if(window.boundaryControl){
+        try{ map.removeControl(window.boundaryControl); }catch(e){}
+    }
+
+    const municipalityOverlay = L.layerGroup();
+    const districtOverlay = L.layerGroup();
+
+    municipalityFeatures.forEach(f=>{
+        const p=f.properties||{};
+        const city = boundaryCityFromProperties(p);
+        if(!city) return;
+
+        const layer=L.geoJSON(f,{
+            style:{
+                color:"#ffffff",
+                weight:3,
+                fillColor:cityColor(city),
+                fillOpacity:0.08,
+                opacity:1
+            }
+        });
+        layer.bindTooltip(city,{sticky:true});
+        municipalityOverlay.addLayer(layer);
+    });
+
+    districtFeatures.forEach(f=>{
+        const city=f.__mapCity || boundaryCityFromProperties(f.properties||{});
+        if(!city) return;
+        const name=boundaryName(f.properties||{});
+        const layer=L.geoJSON(f,{
+            style:{
+                color:"#ffffff",
+                weight:1.5,
+                fillColor:cityColor(city),
+                fillOpacity:0.10,
+                opacity:0.95
+            }
+        });
+        layer.bindTooltip(`${name || "District"} (${city})`,{sticky:true});
+        districtOverlay.addLayer(layer);
+    });
+
+    /* Visible by default: these are the real GIS layers. */
+    municipalityOverlay.addTo(map);
+    districtOverlay.addTo(map);
+
+    window.boundaryControl = L.control.layers(
+        {"Satellite":satelliteLayer,"Street":streetLayer},
+        {
+            "Municipality Boundaries":municipalityOverlay,
+            "District Boundaries":districtOverlay
+        },
+        {collapsed:false,position:"topright"}
+    ).addTo(map);
+
+    window.municipalityOverlay=municipalityOverlay;
+    window.districtOverlay=districtOverlay;
+}
+
+function cityColor(city){
+    if(city === "Dammam") return "#ef4444";
+    if(city === "Al Khobar") return "#facc15";
+    if(city === "Khobar") return "#facc15";
+    if(city === "Dhahran") return "#4ade80";
+    return "#60a5fa";
+}
+
+function buildGeoIndexes(){
+    districtIndex=[];
+    cityIndex=[];
+
+    municipalityFeatures.forEach(feature=>{
+        const p=feature.properties||{};
+        const city=boundaryCityFromProperties(p);
+        if(city) cityIndex.push({feature,city});
+    });
+
+    districtFeatures.forEach(feature=>{
+        const p=feature.properties||{};
+        const name=boundaryName(p);
+        const city=feature.__mapCity || boundaryCityFromProperties(p);
         if(name){
             districtIndex.push({
                 feature,
                 name,
                 key:norm(name),
-                city
-            });
-        }
-
-        if(city){
-            cityIndex.push({
-                feature,
                 city
             });
         }
@@ -1116,6 +1195,52 @@ function showLevel2(city){
         return;
     }
 
+    /* ------------------------------------------------------------
+       REAL DISTRICT BOUNDARIES
+       Draw the actual GIS district layer underneath the 3 query-data
+       groups. Counts/colours still come from the Grafana query.
+       ------------------------------------------------------------ */
+    const cityDistrictFeatures = districtFeatures.filter(f =>
+        (f.__mapCity || boundaryCityFromProperties(f.properties||{})) === city
+    );
+
+    const districtCountsForView = aggregateAllCityDistricts(rows);
+    const districtValues = Object.values(districtCountsForView).map(x=>x.count);
+
+    cityDistrictFeatures.forEach(feature=>{
+        const name = boundaryName(feature.properties||{});
+        const key = norm(name);
+        const d = districtCountsForView[key];
+        const c = d ? riskColor(d.count,districtValues) : "#94a3b8";
+
+        const layer = L.geoJSON(feature,{
+            style:{
+                color:"#ffffff",
+                weight:1.5,
+                opacity:0.95,
+                fillColor:c,
+                fillOpacity:d ? 0.22 : 0.06
+            }
+        }).addTo(map);
+
+        layer.eachLayer(poly=>{
+            poly.bindTooltip(
+                `<b>${escapeHtml(name || "District")}</b><br>Incidents: ${fmt(d ? d.count : 0)}`,
+                {sticky:true}
+            );
+            poly.on("click",()=>{
+                const matching = rows.filter(r=>{
+                    const found=findDistrictForRow(r);
+                    return found && norm(found.name)===key;
+                });
+                if(matching.length){
+                    showLevel3({index:0,items:matching,count:sum(matching)},city);
+                }
+            });
+        });
+        mapLayers.push(layer);
+    });
+
     const groups =
         createClusters(rows,3);
 
@@ -1221,6 +1346,18 @@ function showLevel2(city){
 
    If the same district has multiple query rows, counts are SUMMED.
    ============================================================ */
+
+function aggregateAllCityDistricts(rows){
+    const out={};
+    rows.forEach(row=>{
+        const d=findDistrictForRow(row);
+        if(!d) return;
+        const key=norm(d.name);
+        if(!out[key]) out[key]={name:d.name,count:0};
+        out[key].count += number(row.count);
+    });
+    return out;
+}
 
 function aggregateDistricts(groupRows){
 
