@@ -1,430 +1,173 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>Incident Map - Dynamic</title>
-
-    <!-- Leaflet -->
-    <link
-        rel="stylesheet"
-        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    />
-
-    <style>
-        * {
-            box-sizing: border-box;
-        }
-
-        html,
-        body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            background: #303050;
-            font-family: Arial, Helvetica, sans-serif;
-        }
-
-        .page {
-            width: 100%;
-            height: 100vh;
-            padding: 0 10px 10px;
-            background: #303050;
-        }
-
-        .title {
-            height: 209px;
-            display: flex;
-            align-items: flex-end;
-            justify-content: center;
-            padding-bottom: 8px;
-            color: white;
-            font-size: 14px;
-            font-weight: bold;
-        }
-
-        #map {
-            width: 100%;
-            height: calc(100vh - 219px);
-            min-height: 450px;
-            position: relative;
-            background: #d8c79c;
-        }
-
-        /* -----------------------------------
-           TOP LEFT PANEL
-        ----------------------------------- */
-
-        .info-panel {
-            position: absolute;
-            z-index: 1000;
-            top: 12px;
-            left: 12px;
-
-            width: 300px;
-            min-height: 110px;
-
-            padding: 12px 14px;
-
-            color: white;
-            background: rgba(3, 12, 17, 0.94);
-
-            border: 1px solid rgba(255,255,255,0.30);
-            border-radius: 10px;
-
-            box-shadow: 0 4px 15px rgba(0,0,0,0.35);
-        }
-
-        .level {
-            color: #39ff14;
-            font-size: 15px;
-            font-weight: bold;
-            margin-bottom: 8px;
-        }
-
-        .stats {
-            font-size: 12px;
-            font-weight: bold;
-            line-height: 1.4;
-        }
-
-        /* -----------------------------------
-           LEGEND
-        ----------------------------------- */
-
-        .legend {
-            position: absolute;
-            z-index: 1000;
-            right: 15px;
-            bottom: 15px;
-
-            width: 300px;
-
-            padding: 14px;
-
-            color: white;
-            background: rgba(3, 12, 17, 0.94);
-
-            border: 1px solid rgba(255,255,255,0.30);
-            border-radius: 10px;
-
-            box-shadow: 0 4px 15px rgba(0,0,0,0.35);
-        }
-
-        .legend-title {
-            font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 12px;
-        }
-
-        .legend-row {
-            display: flex;
-            align-items: center;
-            gap: 9px;
-            margin: 7px 0;
-            font-size: 13px;
-            font-weight: bold;
-        }
-
-        .legend-color {
-            width: 25px;
-            height: 20px;
-            border-radius: 3px;
-            border: 1px solid rgba(255,255,255,0.4);
-        }
-
-        .red {
-            background: #d71920;
-        }
-
-        .yellow {
-            background: #d89b00;
-        }
-
-        .green {
-            background: #16803c;
-        }
-
-        .pink {
-            background: #ffaaaa;
-        }
-
-        .khobar {
-            background: #ffe68a;
-        }
-
-        .dhahran {
-            background: #9bd48a;
-        }
-
-        .legend-divider {
-            border-top: 2px solid rgba(255,255,255,0.85);
-            margin: 12px 0;
-        }
-
-        /* -----------------------------------
-           RESET BUTTON
-        ----------------------------------- */
-
-        .reset-btn {
-            position: absolute;
-            z-index: 1000;
-            right: 15px;
-            top: 13px;
-
-            padding: 12px 18px;
-
-            color: white;
-            background: rgba(3, 12, 17, 0.94);
-
-            border: 1px solid rgba(255,255,255,0.35);
-            border-radius: 7px;
-
-            font-size: 14px;
-            font-weight: bold;
-
-            cursor: pointer;
-        }
-
-        .reset-btn:hover {
-            background: #17252b;
-        }
-
-        /* -----------------------------------
-           BOTTOM INSTRUCTION
-        ----------------------------------- */
-
-        .instruction {
-            position: absolute;
-            z-index: 1000;
-            left: 15px;
-            bottom: 15px;
-
-            padding: 11px 16px;
-
-            color: white;
-            background: rgba(3, 12, 17, 0.94);
-
-            border: 1px solid rgba(255,255,255,0.35);
-            border-radius: 8px;
-
-            font-size: 13px;
-        }
-
-        /* -----------------------------------
-           COUNT LABEL
-           
-           IMPORTANT:
-           These are NOT clustered bubbles.
-           They are simple labels attached to
-           the polygon/location.
-        ----------------------------------- */
-
-        .count-label {
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-        }
-
-        .count-label::before {
-            display: none !important;
-        }
-
-        .count-number {
-            min-width: 38px;
-            height: 38px;
-
-            display: flex;
-            align-items: center;
-            justify-content: center;
-
-            padding: 4px 7px;
-
-            border-radius: 50%;
-
-            color: white;
-
-            font-size: 12px;
-            font-weight: bold;
-
-            border: 2px solid white;
-
-            box-shadow: 0 2px 7px rgba(0,0,0,0.35);
-        }
-
-        .count-high {
-            background: #d71920;
-        }
-
-        .count-medium {
-            background: #d89b00;
-        }
-
-        .count-low {
-            background: #16803c;
-        }
-
-        /* -----------------------------------
-           POLYGON STYLING
-        ----------------------------------- */
-
-        .municipality-polygon {
-            fill-opacity: 0.65;
-            weight: 2.5;
-            color: white;
-        }
-
-        .district-polygon {
-            fill-opacity: 0.55;
-            weight: 2;
-            color: white;
-        }
-
-        .location-dot {
-            stroke: white;
-            stroke-width: 2;
-        }
-
-        /* Leaflet popup */
-        .leaflet-popup-content-wrapper {
-            background: #071116;
-            color: white;
-        }
-
-        .leaflet-popup-tip {
-            background: #071116;
-        }
-
-        .leaflet-popup-content {
-            font-size: 13px;
-        }
-
-        /* -----------------------------------
-           MOBILE
-        ----------------------------------- */
-
-        @media (max-width: 700px) {
-
-            .title {
-                height: 130px;
-            }
-
-            #map {
-                height: calc(100vh - 140px);
-            }
-
-            .info-panel {
-                width: 260px;
-            }
-
-            .legend {
-                width: 245px;
-                right: 10px;
-                bottom: 10px;
-            }
-
-            .instruction {
-                display: none;
-            }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Incident Map - Query Driven</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;font-family:Arial,Helvetica,sans-serif;background:#0b1114}
+#map{width:100%;height:100vh;background:#d8c79c}
+
+/* ---------- TOP LEFT ---------- */
+.info-panel{
+    position:absolute;z-index:2000;top:14px;left:14px;
+    min-width:300px;max-width:430px;
+    padding:12px 16px;color:#fff;
+    background:rgba(3,12,17,.90);
+    border:1px solid rgba(255,255,255,.25);
+    border-radius:10px;
+    box-shadow:0 5px 18px rgba(0,0,0,.35);
+}
+.level{color:#39ff14;font-size:14px;font-weight:800;margin-bottom:5px}
+.title{font-size:20px;font-weight:800;line-height:1.15}
+.stats{font-size:11px;color:#d7d7d7;margin-top:7px}
+
+/* ---------- BUTTONS ---------- */
+.top-buttons{
+    position:absolute;z-index:2000;right:14px;top:14px;
+    display:flex;gap:6px
+}
+.top-btn{
+    padding:10px 14px;color:#fff;background:rgba(3,12,17,.90);
+    border:1px solid rgba(255,255,255,.30);border-radius:7px;
+    font-size:13px;font-weight:700;cursor:pointer
+}
+.top-btn:hover{background:#17252b}
+
+/* ---------- LEGEND ---------- */
+.legend{
+    position:absolute;z-index:2000;right:14px;bottom:14px;
+    width:285px;padding:13px 15px;color:#fff;
+    background:rgba(3,12,17,.91);
+    border:1px solid rgba(255,255,255,.25);
+    border-radius:9px;box-shadow:0 5px 18px rgba(0,0,0,.35)
+}
+.legend-title{font-size:17px;font-weight:800;margin-bottom:9px}
+.legend-row{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:12px;font-weight:700}
+.legend-color{width:19px;height:15px;border-radius:2px;border:1px solid rgba(255,255,255,.35)}
+.red{background:#ef4444}.yellow{background:#facc15}.green{background:#65b84a}
+.divider{border-top:1px solid rgba(255,255,255,.65);margin:9px 0}
+
+/* ---------- BOTTOM MESSAGE ---------- */
+.instruction{
+    position:absolute;z-index:2000;left:14px;bottom:14px;
+    padding:9px 13px;color:#fff;background:rgba(3,12,17,.90);
+    border:1px solid rgba(255,255,255,.25);border-radius:7px;
+    font-size:12px
+}
+
+/* ---------- NUMBER ONLY LABEL ----------
+   No circle. No square. No background.
+*/
+.number-label{
+    background:transparent !important;
+    border:0 !important;
+    box-shadow:none !important;
+    width:auto !important;
+    height:auto !important;
+}
+.number-label::before{display:none!important}
+.number-text{
+    display:block;
+    color:#fff;
+    font-size:17px;
+    line-height:1;
+    font-weight:900;
+    white-space:nowrap;
+    text-align:center;
+    transform:translate(-50%,-50%);
+    text-shadow:
+        0 2px 2px rgba(0,0,0,.95),
+        2px 0 2px rgba(0,0,0,.85),
+        -2px 0 2px rgba(0,0,0,.85),
+        0 -1px 2px rgba(0,0,0,.85);
+}
+.number-large .number-text{font-size:21px}
+.number-small .number-text{font-size:13px}
+
+/* ---------- LEAFLET ---------- */
+.leaflet-control-attribution{
+    background:rgba(255,255,255,.55)!important;
+    font-size:9px!important
+}
+.leaflet-popup-content-wrapper{
+    background:#071116;color:#fff;border-radius:8px
+}
+.leaflet-popup-tip{background:#071116}
+.leaflet-popup-content{font-size:12px;line-height:1.45}
+.leaflet-tooltip{background:#071116;color:#fff;border:0;font-size:11px}
+
+@media(max-width:700px){
+ .info-panel{left:8px;top:8px;min-width:220px;max-width:280px}
+ .title{font-size:15px}
+ .legend{right:8px;bottom:8px;width:225px}
+ .instruction{left:8px;bottom:8px;max-width:260px}
+ .top-buttons{right:8px;top:8px}
+ .top-btn{padding:8px 10px;font-size:11px}
+}
+</style>
 </head>
 
 <body>
+<div id="map">
 
-<div class="page">
-
-    <div class="title">
-        Incident Map (Dynamic)
+    <div class="info-panel">
+        <div class="level" id="levelTitle">LEVEL 1</div>
+        <div class="title" id="pageTitle">Municipalities Overview</div>
+        <div class="stats" id="stats">Waiting for Grafana query data...</div>
     </div>
 
-    <div id="map">
-
-        <!-- Information -->
-        <div class="info-panel">
-
-            <div class="level" id="levelTitle">
-                LEVEL 1
-            </div>
-
-            <div class="stats" id="stats">
-                SQL data: 134 locations | Total incidents: 58,731
-            </div>
-
-        </div>
-
-        <!-- Reset -->
-        <button
-            class="reset-btn"
-            id="resetBtn"
-        >
-            ↻ Reset View
-        </button>
-
-        <!-- Legend -->
-        <div class="legend">
-
-            <div class="legend-title">
-                Incidents (Count)
-            </div>
-
-            <div class="legend-row">
-                <div class="legend-color red"></div>
-                <span>Red — High</span>
-            </div>
-
-            <div class="legend-row">
-                <div class="legend-color yellow"></div>
-                <span>Yellow — Medium</span>
-            </div>
-
-            <div class="legend-row">
-                <div class="legend-color green"></div>
-                <span>Green — Low</span>
-            </div>
-
-            <div class="legend-divider"></div>
-
-            <div class="legend-row">
-                <div class="legend-color pink"></div>
-                <span>Dammam</span>
-            </div>
-
-            <div class="legend-row">
-                <div class="legend-color khobar"></div>
-                <span>Khobar</span>
-            </div>
-
-            <div class="legend-row">
-                <div class="legend-color dhahran"></div>
-                <span>Dhahran</span>
-            </div>
-
-        </div>
-
-        <!-- Instruction -->
-        <div
-            class="instruction"
-            id="instruction"
-        >
-            ⓘ Click on any Municipality to view Districts (Level 2)
-        </div>
-
+    <div class="top-buttons">
+        <button class="top-btn" id="backBtn" style="display:none">← Back</button>
+        <button class="top-btn" id="resetBtn">↻ Reset View</button>
     </div>
 
+    <div class="legend">
+        <div class="legend-title">Incidents (Count)</div>
+        <div class="legend-row"><span class="legend-color red"></span><span>Red — High</span></div>
+        <div class="legend-row"><span class="legend-color yellow"></span><span>Yellow — Medium</span></div>
+        <div class="legend-row"><span class="legend-color green"></span><span>Green — Low</span></div>
+        <div class="divider"></div>
+        <div style="font-size:11px;color:#ddd">
+            Colors are calculated from the current query data.
+        </div>
+    </div>
+
+    <div class="instruction" id="instruction">
+        ⓘ Waiting for Grafana query data
+    </div>
 </div>
 
-
-<!-- Leaflet -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.2.0/turf.min.js"></script>
 
 <script>
-
 /* ============================================================
-   MAP INITIALIZATION
+   QUERY-DRIVEN INCIDENT MAP
+
+   Expected Grafana message:
+
+   {
+      type: "incidentData",
+      data: [
+        {
+          state: "Location Name",
+          lat: 26.42,
+          long: 50.08,
+          count: 1234,
+          ticket: "...",
+          classification: "...",
+          status: "..."
+        }
+      ]
+   }
+
+   This keeps the same field contract as the original working
+   Grafana integration.
    ============================================================ */
 
 const map = L.map("map", {
@@ -432,900 +175,1494 @@ const map = L.map("map", {
     preferCanvas: true
 });
 
-
-/* ============================================================
-   BASE MAP
-   ============================================================ */
-
 L.tileLayer(
-    "https://server.arcgisonline.com/ArcGIS/rest/services/" +
-    "World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     {
-        attribution:
-            "Tiles © Esri | OpenStreetMap contributors",
-        maxZoom: 19
+        attribution:"Tiles © Esri | OpenStreetMap contributors",
+        maxZoom:19
     }
 ).addTo(map);
 
+const CITIES = ["Dammam","Al Khobar","Dhahran"];
+
+const CITY_ALIASES = {
+    "dammam":"Dammam",
+    "ad dammam":"Dammam",
+    "ad-dammam":"Dammam",
+    "al dammam":"Dammam",
+    "al-dammam":"Dammam",
+
+    "khobar":"Al Khobar",
+    "al khobar":"Al Khobar",
+    "al-khobar":"Al Khobar",
+    "alkhobar":"Al Khobar",
+
+    "dhahran":"Dhahran",
+    "ad dhahran":"Dhahran",
+    "ad-dhahran":"Dhahran",
+    "al dhahran":"Dhahran",
+    "al-dhahran":"Dhahran"
+};
+
+let rawRows = [];
+let currentLevel = 1;
+let selectedCity = null;
+let selectedGroup = null;
+
+let mapLayers = [];
+let numberLayers = [];
+
+let districtFeatures = [];
+let municipalityFeatures = [];
+let districtIndex = [];
+let cityIndex = [];
+
+let dataReady = false;
 
 /* ============================================================
-   DATA
-   ============================================================
-
-   Replace these arrays with your actual SQL/API data.
-
-   IMPORTANT:
-
-   There is NO marker clustering.
-
-   Every municipality/district/location gets its own
-   polygon or marker and its own count.
-
+   NORMALIZATION
    ============================================================ */
 
-
-/* ------------------------------------------------------------
-   LEVEL 1
-   MUNICIPALITIES
-   ------------------------------------------------------------ */
-
-const municipalities = [
-
-    {
-        id: "dammam",
-        name: "Dammam",
-        count: 24500,
-
-        /* polygon coordinates */
-        geometry: [
-            [26.55, 50.00],
-            [26.65, 50.00],
-            [26.68, 50.15],
-            [26.55, 50.18],
-            [26.55, 50.00]
-        ],
-
-        center: [26.61, 50.09]
-    },
-
-    {
-        id: "khobar",
-        name: "Khobar",
-        count: 18000,
-
-        geometry: [
-            [26.20, 50.15],
-            [26.35, 50.15],
-            [26.38, 50.30],
-            [26.20, 50.30],
-            [26.20, 50.15]
-        ],
-
-        center: [26.29, 50.22]
-    },
-
-    {
-        id: "dhahran",
-        name: "Dhahran",
-        count: 16231,
-
-        geometry: [
-            [26.20, 50.05],
-            [26.32, 50.05],
-            [26.35, 50.16],
-            [26.20, 50.16],
-            [26.20, 50.05]
-        ],
-
-        center: [26.27, 50.10]
-    }
-
-];
-
-
-/* ------------------------------------------------------------
-   LEVEL 2
-   DISTRICTS
-
-   Each district belongs to a municipality.
-
-   The districts themselves are NOT clustered.
-
-   Their individual counts are displayed.
-
-   The color is based on their count.
-   ------------------------------------------------------------ */
-
-const districts = [
-
-    /* Dammam */
-
-    {
-        id: "d1",
-        municipalityId: "dammam",
-        name: "District 1",
-        count: 9200,
-        center: [26.61, 50.06],
-
-        geometry: [
-            [26.55, 50.00],
-            [26.63, 50.00],
-            [26.63, 50.09],
-            [26.55, 50.09],
-            [26.55, 50.00]
-        ]
-    },
-
-    {
-        id: "d2",
-        municipalityId: "dammam",
-        name: "District 2",
-        count: 7600,
-        center: [26.61, 50.12],
-
-        geometry: [
-            [26.55, 50.09],
-            [26.63, 50.09],
-            [26.63, 50.18],
-            [26.55, 50.18],
-            [26.55, 50.09]
-        ]
-    },
-
-    {
-        id: "d3",
-        municipalityId: "dammam",
-        name: "District 3",
-        count: 7700,
-        center: [26.66, 50.09],
-
-        geometry: [
-            [26.63, 50.00],
-            [26.68, 50.00],
-            [26.68, 50.18],
-            [26.63, 50.18],
-            [26.63, 50.00]
-        ]
-    },
-
-
-    /* Khobar */
-
-    {
-        id: "k1",
-        municipalityId: "khobar",
-        name: "Khobar District 1",
-        count: 8000,
-        center: [26.27, 50.18],
-
-        geometry: [
-            [26.20, 50.15],
-            [26.30, 50.15],
-            [26.30, 50.30],
-            [26.20, 50.30],
-            [26.20, 50.15]
-        ]
-    },
-
-    {
-        id: "k2",
-        municipalityId: "khobar",
-        name: "Khobar District 2",
-        count: 6000,
-        center: [26.35, 50.22],
-
-        geometry: [
-            [26.30, 50.15],
-            [26.38, 50.15],
-            [26.38, 50.30],
-            [26.30, 50.30],
-            [26.30, 50.15]
-        ]
-    },
-
-
-    /* Dhahran */
-
-    {
-        id: "h1",
-        municipalityId: "dhahran",
-        name: "Dhahran District 1",
-        count: 7000,
-        center: [26.25, 50.08],
-
-        geometry: [
-            [26.20, 50.05],
-            [26.28, 50.05],
-            [26.28, 50.16],
-            [26.20, 50.16],
-            [26.20, 50.05]
-        ]
-    },
-
-    {
-        id: "h2",
-        municipalityId: "dhahran",
-        name: "Dhahran District 2",
-        count: 9231,
-        center: [26.31, 50.11],
-
-        geometry: [
-            [26.28, 50.05],
-            [26.35, 50.05],
-            [26.35, 50.16],
-            [26.28, 50.16],
-            [26.28, 50.05]
-        ]
-    }
-
-];
-
-
-/* ------------------------------------------------------------
-   LEVEL 3
-   INDIVIDUAL LOCATIONS
-   ------------------------------------------------------------ */
-
-const locations = [
-
-    {
-        id: 1,
-        districtId: "d1",
-        name: "Location A",
-        count: 305,
-        lat: 26.59,
-        lng: 50.04
-    },
-
-    {
-        id: 2,
-        districtId: "d1",
-        name: "Location B",
-        count: 215,
-        lat: 26.62,
-        lng: 50.06
-    },
-
-    {
-        id: 3,
-        districtId: "d2",
-        name: "Location C",
-        count: 145,
-        lat: 26.60,
-        lng: 50.13
-    },
-
-    {
-        id: 4,
-        districtId: "d2",
-        name: "Location D",
-        count: 95,
-        lat: 26.63,
-        lng: 50.14
-    },
-
-    {
-        id: 5,
-        districtId: "d3",
-        name: "Location E",
-        count: 390,
-        lat: 26.65,
-        lng: 50.10
-    },
-
-    {
-        id: 6,
-        districtId: "k1",
-        name: "Location F",
-        count: 280,
-        lat: 26.25,
-        lng: 50.19
-    },
-
-    {
-        id: 7,
-        districtId: "k2",
-        name: "Location G",
-        count: 120,
-        lat: 26.34,
-        lng: 50.24
-    },
-
-    {
-        id: 8,
-        districtId: "h1",
-        name: "Location H",
-        count: 80,
-        lat: 26.24,
-        lng: 50.09
-    },
-
-    {
-        id: 9,
-        districtId: "h2",
-        name: "Location I",
-        count: 410,
-        lat: 26.31,
-        lng: 50.12
-    }
-
-];
-
-
-/* ============================================================
-   LAYER MANAGEMENT
-   ============================================================ */
-
-let currentLayer = 1;
-
-let activeLayers = [];
-
-
-/* ============================================================
-   COLOR FUNCTIONS
-   ============================================================
-
-   IMPORTANT:
-
-   These colors are based on COUNT.
-
-   High   = Red
-   Medium = Yellow
-   Low    = Green
-
-   ============================================================ */
-
-function getCountColor(count, maxCount = null) {
-
-    if (!maxCount) {
-
-        maxCount = Math.max(
-            ...locations.map(x => x.count),
-            1
-        );
-
-    }
-
-    const ratio = count / maxCount;
-
-    if (ratio >= 0.66) {
-        return "#d71920";
-    }
-
-    if (ratio >= 0.33) {
-        return "#d89b00";
-    }
-
-    return "#16803c";
+function norm(v){
+    return String(v ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/[ًٌٍَُِّْـ]/g,"")
+        .replace(/[\u200f\u200e]/g,"")
+        .replace(/[‐‑‒–—−]/g,"-")
+        .replace(/\s+/g," ")
+        .trim();
 }
 
+function normalizeCity(v){
+    const k = norm(v);
+    if(CITY_ALIASES[k]) return CITY_ALIASES[k];
+
+    if(k.includes("dammam")) return "Dammam";
+    if(k.includes("khobar")) return "Al Khobar";
+    if(k.includes("dhahran")) return "Dhahran";
+
+    return null;
+}
+
+function number(v){
+    const n = Number(String(v ?? "").replace(/,/g,""));
+    return Number.isFinite(n) ? n : 0;
+}
+
+function fmt(v){
+    return Number(v || 0).toLocaleString("en-US");
+}
 
 /* ============================================================
-   POLYGON STYLE
+   DATA HELPERS
    ============================================================ */
 
-function polygonStyle(count, maxCount, className) {
+function validRow(r){
+    return r &&
+        String(r.state ?? "").trim() !== "" &&
+        Number.isFinite(Number(r.lat)) &&
+        Number.isFinite(Number(r.long)) &&
+        Number.isFinite(Number(r.count));
+}
+
+function cleanRows(rows){
+    return (rows || [])
+        .map(r => ({
+            state: String(r.state ?? "").trim(),
+            lat: Number(r.lat),
+            lng: Number(r.long),
+            count: number(r.count),
+            ticket: r.ticket ?? "",
+            classification: r.classification ?? "",
+            status: r.status ?? ""
+        }))
+        .filter(validRow);
+}
+
+/* ============================================================
+   GEOJSON
+
+   If districts.geojson exists beside this HTML, it is used for
+   actual district boundaries.
+
+   Expected properties:
+      City
+      Name
+
+   If it is not available, the map automatically falls back to
+   point-based geometry from the actual query coordinates.
+   ============================================================ */
+
+async function loadGeoJSON(){
+
+    try{
+        const response = await fetch("./districts.geojson", {
+            cache:"no-store"
+        });
+
+        if(!response.ok) throw new Error("districts.geojson not found");
+
+        const geo = await response.json();
+
+        districtFeatures = (geo.features || []).filter(f =>
+            f && f.geometry
+        );
+
+        buildGeoIndexes();
+
+        console.log(
+            "Loaded districts.geojson:",
+            districtFeatures.length,
+            "features"
+        );
+
+    }catch(err){
+
+        console.warn(
+            "districts.geojson unavailable. Using query-coordinate geometry.",
+            err
+        );
+
+        districtFeatures = [];
+        districtIndex = [];
+        cityIndex = [];
+    }
+}
+
+function buildGeoIndexes(){
+
+    districtIndex = [];
+    cityIndex = [];
+
+    districtFeatures.forEach(feature => {
+
+        const p = feature.properties || {};
+
+        const name =
+            String(
+                p.Name ??
+                p.name ??
+                p.NAME ??
+                p.District ??
+                p.DistrictName ??
+                ""
+            ).trim();
+
+        const city =
+            normalizeCity(
+                p.City ??
+                p.city ??
+                p.Municipality ??
+                p.MunicipalityName ??
+                ""
+            );
+
+        if(name){
+            districtIndex.push({
+                feature,
+                name,
+                key:norm(name),
+                city
+            });
+        }
+
+        if(city){
+            cityIndex.push({
+                feature,
+                city
+            });
+        }
+    });
+}
+
+/* ============================================================
+   POINT IN POLYGON
+   ============================================================ */
+
+function pointFeature(row){
+    return turf.point([row.lng,row.lat]);
+}
+
+function findDistrictForRow(row){
+
+    if(!districtIndex.length) return null;
+
+    const pt = pointFeature(row);
+
+    for(const d of districtIndex){
+
+        try{
+            if(
+                turf.booleanPointInPolygon(
+                    pt,
+                    d.feature
+                )
+            ){
+                return d;
+            }
+        }catch(e){}
+    }
+
+    /* Name match as secondary fallback */
+    const exact = districtIndex.find(
+        d => d.key === norm(row.state)
+    );
+
+    return exact || null;
+}
+
+/* ============================================================
+   MUNICIPALITY RESOLUTION
+   ============================================================ */
+
+function resolveCity(row){
+
+    /* 1. Exact municipality name */
+    const direct = normalizeCity(row.state);
+    if(direct) return direct;
+
+    /* 2. Actual district polygon */
+    const district = findDistrictForRow(row);
+
+    if(district && district.city){
+        return district.city;
+    }
+
+    /* 3. Point inside municipality feature */
+    if(cityIndex.length){
+
+        const pt = pointFeature(row);
+
+        for(const item of cityIndex){
+
+            try{
+                if(
+                    turf.booleanPointInPolygon(
+                        pt,
+                        item.feature
+                    )
+                ){
+                    return item.city;
+                }
+            }catch(e){}
+        }
+    }
+
+    /* 4. Saudi Eastern Province coordinate fallback */
+    const lat = row.lat;
+    const lng = row.lng;
+
+    /*
+       These are deliberately broad fallbacks only.
+       Actual GeoJSON/data coordinates take priority.
+    */
+
+    if(
+        lat >= 26.15 &&
+        lat <= 26.55 &&
+        lng >= 49.95 &&
+        lng <= 50.22
+    ){
+        /* Dhahran is south-west of central Dammam */
+        if(
+            lat <= 26.34 &&
+            lng <= 50.18
+        ){
+            return "Dhahran";
+        }
+
+        return "Dammam";
+    }
+
+    if(
+        lat >= 26.15 &&
+        lat <= 26.45 &&
+        lng >= 50.15 &&
+        lng <= 50.35
+    ){
+        return "Al Khobar";
+    }
+
+    return null;
+}
+
+/* ============================================================
+   DATA AGGREGATION
+   ============================================================ */
+
+function groupRowsByCity(){
+
+    const result = {
+        "Dammam":[],
+        "Al Khobar":[],
+        "Dhahran":[]
+    };
+
+    rawRows.forEach(row => {
+
+        const city = resolveCity(row);
+
+        if(city && result[city]){
+            result[city].push({
+                ...row,
+                city
+            });
+        }
+    });
+
+    return result;
+}
+
+function sum(rows){
+    return rows.reduce(
+        (a,r) => a + number(r.count),
+        0
+    );
+}
+
+/* ============================================================
+   RISK
+
+   High = top third
+   Medium = middle third
+   Low = bottom third
+
+   This is calculated independently for the visible level.
+   ============================================================ */
+
+function riskColor(value, values){
+
+    if(!values.length) return "#65b84a";
+
+    const sorted = [...values].sort((a,b)=>b-a);
+
+    /* With 3 items: highest=red, middle=yellow, lowest=green. */
+    if(sorted.length <= 3){
+        const rank = sorted.indexOf(value);
+        if(rank === 0) return "#ef4444";
+        if(rank === 1) return "#facc15";
+        return "#65b84a";
+    }
+
+    const lowCut =
+        sorted[Math.floor(sorted.length*0.66)];
+
+    const highCut =
+        sorted[Math.floor(sorted.length*0.33)];
+
+    if(value >= highCut) return "#ef4444";
+    if(value >= lowCut) return "#facc15";
+    return "#65b84a";
+}
+
+function riskName(value, values){
+
+    if(!values.length) return "Low";
+
+    const sorted = [...values].sort((a,b)=>b-a);
+
+    if(sorted.length <= 3){
+        const rank = sorted.indexOf(value);
+        if(rank === 0) return "High";
+        if(rank === 1) return "Medium";
+        return "Low";
+    }
+
+    const lowCut =
+        sorted[Math.floor(sorted.length*0.66)];
+
+    const highCut =
+        sorted[Math.floor(sorted.length*0.33)];
+
+    if(value >= highCut) return "High";
+    if(value >= lowCut) return "Medium";
+    return "Low";
+}
+
+/* ============================================================
+   NUMBER ONLY LABEL
+   ============================================================ */
+
+function numberLabel(value, size="normal"){
+
+    return L.marker(
+        [value.lat,value.lng],
+        {
+            interactive:false,
+            keyboard:false,
+            icon:L.divIcon({
+                className:
+                    "number-label " +
+                    (size === "large"
+                        ? "number-large"
+                        : size === "small"
+                            ? "number-small"
+                            : ""),
+                html:
+                    `<span class="number-text">${fmt(value.count)}</span>`,
+                iconSize:null,
+                iconAnchor:[0,0]
+            }),
+            zIndexOffset:1000
+        }
+    );
+}
+
+function addNumber(value,size="normal"){
+
+    const label = numberLabel(value,size);
+
+    label.addTo(map);
+
+    numberLayers.push(label);
+
+    return label;
+}
+
+/* ============================================================
+   CLEAR
+   ============================================================ */
+
+function clearMap(){
+
+    mapLayers.forEach(layer => {
+
+        try{
+            if(map.hasLayer(layer)){
+                map.removeLayer(layer);
+            }
+        }catch(e){}
+    });
+
+    numberLayers.forEach(layer => {
+
+        try{
+            if(map.hasLayer(layer)){
+                map.removeLayer(layer);
+            }
+        }catch(e){}
+    });
+
+    mapLayers = [];
+    numberLayers = [];
+}
+
+/* ============================================================
+   GEOJSON STYLE
+   ============================================================ */
+
+function polygonStyle(color, opacity=.62, weight=2.5){
 
     return {
-        className: className,
-
-        color: "#ffffff",
-
-        weight: 2,
-
-        fillColor: getCountColor(
-            count,
-            maxCount
-        ),
-
-        fillOpacity: 0.55
+        color:"#fff",
+        weight,
+        opacity:1,
+        fillColor:color,
+        fillOpacity:opacity,
+        lineJoin:"round"
     };
 }
 
-
 /* ============================================================
-   COUNT LABEL
-   ============================================================
+   CITY GEOMETRY
 
-   This is a SIMPLE DIVICON.
-
-   It is NOT a marker cluster.
-
+   Prefer real GeoJSON. If no municipality GeoJSON exists,
+   create a convex hull around the actual query coordinates.
    ============================================================ */
 
-function createCountLabel(count) {
+function cityGeometry(city,rows){
 
-    const color =
-        getCountColor(count);
+    const features =
+        cityIndex
+            .filter(x => x.city === city)
+            .map(x => x.feature);
 
-    let cssClass = "count-low";
+    if(features.length){
 
-    if (color === "#d71920") {
-        cssClass = "count-high";
-    }
-    else if (color === "#d89b00") {
-        cssClass = "count-medium";
-    }
+        try{
 
-    return L.divIcon({
+            const fc =
+                turf.featureCollection(features);
 
-        className: "count-label",
+            const dissolved =
+                turf.union(fc);
 
-        html: `
-            <div
-                class="count-number ${cssClass}"
-            >
-                ${Number(count).toLocaleString()}
-            </div>
-        `,
+            if(dissolved){
+                return dissolved;
+            }
 
-        iconSize: [50, 42],
+        }catch(e){
 
-        iconAnchor: [25, 21]
-    });
-}
+            console.warn(
+                "Municipality dissolve failed:",
+                city,
+                e
+            );
 
-
-/* ============================================================
-   CLEAR CURRENT LAYER
-   ============================================================ */
-
-function clearLayers() {
-
-    activeLayers.forEach(layer => {
-
-        if (map.hasLayer(layer)) {
-            map.removeLayer(layer);
+            /* Use first geometry if dissolve fails */
+            if(features[0]){
+                return features[0];
+            }
         }
+    }
 
-    });
+    /* Query-data fallback */
+    const points = rows.map(r =>
+        turf.point([r.lng,r.lat])
+    );
 
-    activeLayers = [];
+    if(points.length >= 3){
+
+        try{
+            const hull = turf.convex(
+                turf.featureCollection(points)
+            );
+
+            if(hull) return hull;
+
+        }catch(e){}
+    }
+
+    if(points.length === 1){
+
+        return turf.buffer(
+            points[0],
+            2,
+            {units:"kilometers"}
+        );
+    }
+
+    return null;
 }
-
 
 /* ============================================================
    LEVEL 1
    MUNICIPALITIES
    ============================================================ */
 
-function showLevel1() {
+function showLevel1(){
 
-    clearLayers();
+    clearMap();
 
-    currentLayer = 1;
+    currentLevel = 1;
+    selectedCity = null;
+    selectedGroup = null;
 
-    document.getElementById("levelTitle")
-        .innerText = "LEVEL 1";
-
-    document.getElementById("instruction")
-        .innerText =
-        "ⓘ Click on any Municipality to view Districts (Level 2)";
-
-
-    const maxCount = Math.max(
-        ...municipalities.map(x => x.count)
+    setHeader(
+        "LEVEL 1",
+        "Municipalities Overview"
     );
 
+    setInstruction(
+        "ⓘ Click on any Municipality to view Groups (Level 2)"
+    );
 
-    municipalities.forEach(municipality => {
+    const byCity = groupRowsByCity();
 
-        /* Municipality polygon */
+    const cityValues =
+        CITIES.map(city => sum(byCity[city]));
 
-        const polygon = L.polygon(
-            municipality.geometry,
+    CITIES.forEach((city,index)=>{
 
-            polygonStyle(
-                municipality.count,
-                maxCount,
-                "municipality-polygon"
-            )
-        ).addTo(map);
+        const rows = byCity[city] || [];
 
+        if(!rows.length) return;
 
-        /* Popup */
+        const total = sum(rows);
 
-        polygon.bindPopup(`
-            <b>${municipality.name}</b><br>
-            Total incidents:
-            <b>${municipality.count.toLocaleString()}</b>
-        `);
+        const color =
+            riskColor(
+                total,
+                cityValues.filter(v=>v>0)
+            );
 
+        const geometry =
+            cityGeometry(city,rows);
 
-        /* Click municipality */
+        let layer = null;
 
-        polygon.on(
-            "click",
-            function () {
+        if(geometry){
 
-                showLevel2(
-                    municipality.id
+            layer =
+                L.geoJSON(
+                    geometry,
+                    {
+                        style:
+                            polygonStyle(
+                                color,
+                                .58,
+                                3
+                            )
+                    }
+                ).addTo(map);
+
+            layer.eachLayer(poly=>{
+
+                poly.on(
+                    "click",
+                    ()=>{
+                        showLevel2(city);
+                    }
                 );
 
-            }
-        );
+                poly.bindTooltip(
+                    `<b>${city}</b><br>Incidents: ${fmt(total)}`,
+                    {sticky:true}
+                );
 
+                poly.bindPopup(
+                    `<b>${city}</b><br>
+                     Total incidents:
+                     <b>${fmt(total)}</b>`
+                );
+            });
 
-        activeLayers.push(polygon);
+            mapLayers.push(layer);
+        }
 
+        /* Label position from actual geometry */
+        let center = null;
 
-        /* Municipality count */
+        try{
+            center =
+                geometry
+                    ? turf.centroid(geometry).geometry.coordinates
+                    : null;
+        }catch(e){}
 
-        const label = L.marker(
-            municipality.center,
-            {
-                icon: createCountLabel(
-                    municipality.count
-                ),
+        if(!center && rows.length){
 
-                interactive: false
-            }
-        ).addTo(map);
+            center = [
+                rows.reduce((a,r)=>a+r.lat,0)/rows.length,
+                rows.reduce((a,r)=>a+r.lng,0)/rows.length
+            ];
+        }
 
+        if(center){
 
-        activeLayers.push(label);
-
+            addNumber(
+                {
+                    lat:center[1],
+                    lng:center[0],
+                    count:total
+                },
+                "large"
+            );
+        }
     });
 
+    updateStats(
+        "Municipalities",
+        sum(rawRows),
+        rawRows.length
+    );
 
-    updateStats();
+    fitInitial();
 }
 
+/* ============================================================
+   K-MEANS
+
+   Exactly three geographic groups are created from the real
+   query coordinates inside the selected municipality.
+
+   No fake counts are generated.
+   Every group count is SUM(real query count).
+   ============================================================ */
+
+function createClusters(rows,k=3){
+
+    if(rows.length <= k){
+        return rows.map((r,i)=>({
+            index:i,
+            items:[r],
+            count:number(r.count)
+        }));
+    }
+
+    const points = rows.map(r => ({
+        lat:r.lat,
+        lng:r.lng
+    }));
+
+    /* Farthest-seed initialization */
+    const centers = [];
+
+    centers.push({
+        lat:points[0].lat,
+        lng:points[0].lng
+    });
+
+    while(centers.length < k){
+
+        let bestPoint = null;
+        let bestDistance = -1;
+
+        points.forEach(p=>{
+
+            let minDist = Infinity;
+
+            centers.forEach(c=>{
+
+                const d =
+                    Math.pow(p.lat-c.lat,2) +
+                    Math.pow(p.lng-c.lng,2);
+
+                minDist =
+                    Math.min(minDist,d);
+            });
+
+            if(minDist > bestDistance){
+
+                bestDistance = minDist;
+                bestPoint = p;
+            }
+        });
+
+        centers.push({...bestPoint});
+    }
+
+    let assignments =
+        new Array(rows.length).fill(0);
+
+    for(let iteration=0;iteration<30;iteration++){
+
+        let changed = false;
+
+        rows.forEach((row,i)=>{
+
+            let best = 0;
+            let bestDist = Infinity;
+
+            centers.forEach((c,j)=>{
+
+                const d =
+                    Math.pow(row.lat-c.lat,2) +
+                    Math.pow(row.lng-c.lng,2);
+
+                if(d < bestDist){
+
+                    bestDist = d;
+                    best = j;
+                }
+            });
+
+            if(assignments[i] !== best){
+                assignments[i] = best;
+                changed = true;
+            }
+        });
+
+        const sums =
+            centers.map(()=>({
+                lat:0,
+                lng:0,
+                n:0
+            }));
+
+        rows.forEach((row,i)=>{
+
+            const c =
+                sums[assignments[i]];
+
+            c.lat += row.lat;
+            c.lng += row.lng;
+            c.n++;
+        });
+
+        centers.forEach((c,i)=>{
+
+            if(sums[i].n){
+
+                c.lat =
+                    sums[i].lat /
+                    sums[i].n;
+
+                c.lng =
+                    sums[i].lng /
+                    sums[i].n;
+            }
+        });
+
+        if(!changed) break;
+    }
+
+    const groups =
+        centers.map((c,i)=>({
+            index:i,
+            items:[],
+            center:c,
+            count:0
+        }));
+
+    rows.forEach((row,i)=>{
+
+        const g = groups[assignments[i]];
+
+        g.items.push(row);
+        g.count += number(row.count);
+    });
+
+    /* Remove empty groups */
+    return groups.filter(g=>g.items.length);
+}
+
+/* ============================================================
+   GROUP POLYGON
+   ============================================================ */
+
+function groupGeometry(group){
+
+    const points =
+        group.items.map(r =>
+            turf.point([r.lng,r.lat])
+        );
+
+    if(points.length >= 3){
+
+        try{
+
+            const hull =
+                turf.convex(
+                    turf.featureCollection(points)
+                );
+
+            if(hull) return hull;
+
+        }catch(e){}
+    }
+
+    if(points.length === 2){
+
+        try{
+            const line =
+                turf.lineString(
+                    points.map(p=>p.geometry.coordinates)
+                );
+
+            return turf.buffer(
+                line,
+                1.3,
+                {units:"kilometers"}
+            );
+        }catch(e){}
+    }
+
+    if(points.length === 1){
+
+        return turf.buffer(
+            points[0],
+            1.5,
+            {units:"kilometers"}
+        );
+    }
+
+    return null;
+}
 
 /* ============================================================
    LEVEL 2
-   DISTRICTS
+   GROUPS
    ============================================================ */
 
-function showLevel2(municipalityId) {
+function showLevel2(city){
 
-    clearLayers();
+    clearMap();
 
-    currentLayer = 2;
+    currentLevel = 2;
+    selectedCity = city;
+    selectedGroup = null;
 
+    const byCity = groupRowsByCity();
+    const rows = byCity[city] || [];
 
-    const municipality =
-        municipalities.find(
-            x => x.id === municipalityId
-        );
-
-
-    const municipalityDistricts =
-        districts.filter(
-            x =>
-                x.municipalityId === municipalityId
-        );
-
-
-    document.getElementById("levelTitle")
-        .innerText =
-        "LEVEL 2 — " +
-        municipality.name;
-
-
-    document.getElementById("instruction")
-        .innerText =
-        "ⓘ Click on any District to view Locations (Level 3)";
-
-
-    /* Maximum district count */
-
-    const maxCount = Math.max(
-        ...municipalityDistricts.map(
-            x => x.count
-        ),
-        1
+    setHeader(
+        "LEVEL 2",
+        `Groups - ${city}`
     );
 
+    setInstruction(
+        "ⓘ Click on any Group to view Districts (Level 3)"
+    );
 
-    municipalityDistricts.forEach(district => {
+    if(!rows.length){
 
-        /* District polygon */
+        updateStats(city,0,0);
 
-        const polygon = L.polygon(
-            district.geometry,
-
-            polygonStyle(
-                district.count,
-                maxCount,
-                "district-polygon"
-            )
-        ).addTo(map);
-
-
-        polygon.bindPopup(`
-            <b>${district.name}</b><br>
-            Incidents:
-            <b>${district.count.toLocaleString()}</b>
-        `);
-
-
-        /* District click */
-
-        polygon.on(
-            "click",
-            function () {
-
-                showLevel3(
-                    district.id
-                );
-
-            }
-        );
-
-
-        activeLayers.push(polygon);
-
-
-        /* District count */
-
-        const label = L.marker(
-            district.center,
-            {
-                icon: createCountLabel(
-                    district.count
-                ),
-
-                interactive: false
-            }
-        ).addTo(map);
-
-
-        activeLayers.push(label);
-
-    });
-
-
-    /*
-       Fit map to selected municipality districts.
-    */
-
-    if (municipalityDistricts.length > 0) {
-
-        const group =
-            L.featureGroup(
-                activeLayers.filter(
-                    x =>
-                        x instanceof L.Polygon
-                )
-            );
-
-        map.fitBounds(
-            group.getBounds(),
-            {
-                padding: [40, 40]
-            }
-        );
-
+        return;
     }
 
-    updateStats();
+    const groups =
+        createClusters(rows,3);
+
+    const groupValues =
+        groups.map(g=>g.count);
+
+    groups.forEach(group=>{
+
+        const geometry =
+            groupGeometry(group);
+
+        const color =
+            riskColor(
+                group.count,
+                groupValues
+            );
+
+        if(geometry){
+
+            const layer =
+                L.geoJSON(
+                    geometry,
+                    {
+                        style:
+                            polygonStyle(
+                                color,
+                                .62,
+                                2.5
+                            )
+                    }
+                ).addTo(map);
+
+            layer.eachLayer(poly=>{
+
+                poly.on(
+                    "click",
+                    ()=>{
+                        showLevel3(
+                            group,
+                            city
+                        );
+                    }
+                );
+
+                poly.bindTooltip(
+                    `<b>Group ${group.index+1}</b><br>
+                     Incidents: ${fmt(group.count)}`,
+                    {sticky:true}
+                );
+            });
+
+            mapLayers.push(layer);
+        }
+
+        let center =
+            group.center || null;
+
+        if(!center){
+
+            center = {
+                lat:
+                    group.items.reduce(
+                        (a,r)=>a+r.lat,0
+                    ) / group.items.length,
+
+                lng:
+                    group.items.reduce(
+                        (a,r)=>a+r.lng,0
+                    ) / group.items.length
+            };
+        }
+
+        /*
+           NUMBER ONLY.
+           No black square.
+           No circle.
+           No bubble.
+        */
+        addNumber(
+            {
+                lat:center.lat,
+                lng:center.lng,
+                count:group.count
+            },
+            "large"
+        );
+    });
+
+    updateStats(
+        `${city} Groups`,
+        sum(rows),
+        rows.length
+    );
+
+    fitRows(rows,70);
 }
 
+/* ============================================================
+   DISTRICT AGGREGATION
+
+   Original query rows are assigned to actual district polygons
+   using their coordinates.
+
+   If the same district has multiple query rows, counts are SUMMED.
+   ============================================================ */
+
+function aggregateDistricts(groupRows){
+
+    const mapData = new Map();
+
+    groupRows.forEach(row=>{
+
+        const d =
+            findDistrictForRow(row);
+
+        const districtName =
+            d
+                ? d.name
+                : row.state;
+
+        const key =
+            norm(districtName);
+
+        if(!key) return;
+
+        if(!mapData.has(key)){
+
+            mapData.set(
+                key,
+                {
+                    name:districtName,
+                    city:row.city,
+                    count:0,
+                    rows:[],
+                    feature:d ? d.feature : null,
+                    lat:row.lat,
+                    lng:row.lng
+                }
+            );
+        }
+
+        const item =
+            mapData.get(key);
+
+        item.count += number(row.count);
+        item.rows.push(row);
+
+        item.lat =
+            item.rows.reduce(
+                (a,r)=>a+r.lat,0
+            ) / item.rows.length;
+
+        item.lng =
+            item.rows.reduce(
+                (a,r)=>a+r.lng,0
+            ) / item.rows.length;
+    });
+
+    return [...mapData.values()];
+}
 
 /* ============================================================
    LEVEL 3
-   LOCATIONS
+   DISTRICTS
+
+   Uses actual district polygons where available.
+   Otherwise creates small point polygons around the actual
+   query coordinates.
    ============================================================ */
 
-function showLevel3(districtId) {
+function showLevel3(group,city){
 
-    clearLayers();
+    clearMap();
 
-    currentLayer = 3;
+    currentLevel = 3;
+    selectedGroup = group;
 
+    const rows =
+        group.items || [];
 
-    const district =
-        districts.find(
-            x => x.id === districtId
-        );
-
-
-    const districtLocations =
-        locations.filter(
-            x => x.districtId === districtId
-        );
-
-
-    document.getElementById("levelTitle")
-        .innerText =
-        "LEVEL 3 — " +
-        district.name;
-
-
-    document.getElementById("instruction")
-        .innerText =
-        "ⓘ Location incident count";
-
-
-    /*
-       IMPORTANT:
-
-       NO clustering here.
-
-       Each location is an individual circle.
-    */
-
-    const maxCount = Math.max(
-        ...districtLocations.map(
-            x => x.count
-        ),
-        1
+    setHeader(
+        "LEVEL 3",
+        `Districts - ${city} / Group ${group.index+1}`
     );
 
+    setInstruction(
+        `ⓘ District incidents (Count: ${fmt(group.count)})`
+    );
 
-    districtLocations.forEach(location => {
+    const districts =
+        aggregateDistricts(rows);
+
+    const values =
+        districts.map(d=>d.count);
+
+    districts.forEach(district=>{
 
         const color =
-            getCountColor(
-                location.count,
-                maxCount
+            riskColor(
+                district.count,
+                values
             );
 
+        let geometry =
+            district.feature;
 
-        /* Individual location */
+        /* Query coordinate fallback */
+        if(!geometry){
 
-        const circle =
-            L.circleMarker(
-                [
-                    location.lat,
-                    location.lng
-                ],
-                {
-                    radius: 9,
+            const p =
+                turf.point([
+                    district.lng,
+                    district.lat
+                ]);
 
-                    fillColor: color,
+            try{
 
-                    color: "#ffffff",
+                geometry =
+                    turf.buffer(
+                        p,
+                        .8,
+                        {units:"kilometers"}
+                    );
 
-                    weight: 2,
+            }catch(e){}
+        }
 
-                    fillOpacity: 0.90
-                }
-            ).addTo(map);
+        if(geometry){
 
+            const layer =
+                L.geoJSON(
+                    geometry,
+                    {
+                        style:
+                            polygonStyle(
+                                color,
+                                .55,
+                                1.8
+                            )
+                    }
+                ).addTo(map);
 
-        circle.bindPopup(`
-            <b>${location.name}</b><br>
-            Incidents:
-            <b>${location.count.toLocaleString()}</b>
-        `);
+            layer.eachLayer(poly=>{
 
+                poly.bindTooltip(
+                    `<b>${escapeHtml(district.name)}</b><br>
+                     Incidents: ${fmt(district.count)}`,
+                    {sticky:true}
+                );
 
-        activeLayers.push(circle);
+                poly.bindPopup(
+                    `<b>${escapeHtml(district.name)}</b><br>
+                     Incidents:
+                     <b>${fmt(district.count)}</b>`
+                );
 
+                poly.on(
+                    "click",
+                    ()=>{
+                        const first =
+                            district.rows[0];
+
+                        window.parent.postMessage(
+                            {
+                                type:"mapClick",
+                                state:district.name,
+                                municipality:city,
+                                lat:first?.lat ?? district.lat,
+                                long:first?.lng ?? district.lng
+                            },
+                            "*"
+                        );
+                    }
+                );
+            });
+
+            mapLayers.push(layer);
+        }
 
         /*
-           Individual count label.
-
-           Again: NOT a cluster.
+           ONLY THE NUMBER.
+           It floats over the district polygon.
         */
-
-        const label =
-            L.marker(
-                [
-                    location.lat,
-                    location.lng
-                ],
-                {
-                    icon:
-                        createCountLabel(
-                            location.count
-                        ),
-
-                    interactive: false
-                }
-            ).addTo(map);
-
-
-        activeLayers.push(label);
-
+        addNumber(
+            {
+                lat:district.lat,
+                lng:district.lng,
+                count:district.count
+            },
+            "normal"
+        );
     });
 
+    updateStats(
+        `${city} / Group ${group.index+1}`,
+        group.count,
+        rows.length
+    );
 
-    /*
-       Zoom to locations.
-    */
-
-    if (districtLocations.length > 0) {
+    if(districts.length){
 
         const points =
-            districtLocations.map(
-                x => [
-                    x.lat,
-                    x.lng
-                ]
+            districts.map(d=>[
+                d.lat,
+                d.lng
+            ]);
+
+        try{
+
+            map.fitBounds(
+                L.latLngBounds(points),
+                {
+                    padding:[80,80],
+                    maxZoom:16
+                }
             );
+
+        }catch(e){}
+    }
+}
+
+/* ============================================================
+   HEADER / STATS
+   ============================================================ */
+
+function setHeader(level,title){
+
+    document.getElementById(
+        "levelTitle"
+    ).textContent = level;
+
+    document.getElementById(
+        "pageTitle"
+    ).textContent = title;
+
+    document.getElementById(
+        "backBtn"
+    ).style.display =
+        level === "LEVEL 1"
+            ? "none"
+            : "block";
+}
+
+function setInstruction(text){
+
+    document.getElementById(
+        "instruction"
+    ).textContent = text;
+}
+
+function updateStats(label,total,records){
+
+    document.getElementById(
+        "stats"
+    ).textContent =
+        `${records.toLocaleString()} query rows | Total incidents: ${fmt(total)}`;
+}
+
+/* ============================================================
+   FIT
+   ============================================================ */
+
+function fitRows(rows,padding=60){
+
+    if(!rows.length) return;
+
+    const points =
+        rows.map(r=>[
+            r.lat,
+            r.lng
+        ]);
+
+    try{
 
         map.fitBounds(
             L.latLngBounds(points),
             {
-                padding: [60, 60]
+                padding:[padding,padding],
+                maxZoom:14
             }
         );
 
-    }
-
-
-    updateStats();
+    }catch(e){}
 }
 
+function fitInitial(){
+
+    const byCity =
+        groupRowsByCity();
+
+    const all =
+        CITIES.flatMap(city =>
+            byCity[city] || []
+        );
+
+    if(all.length){
+
+        fitRows(all,50);
+
+    }else{
+
+        map.setView(
+            [26.35,50.10],
+            10
+        );
+    }
+}
 
 /* ============================================================
-   STATISTICS
+   BACK
    ============================================================ */
 
-function updateStats() {
+document.getElementById(
+    "backBtn"
+).addEventListener(
+    "click",
+    function(){
 
-    let total = 0;
+        if(currentLevel === 3){
 
-    municipalities.forEach(
-        x => total += x.count
-    );
+            if(selectedCity){
 
+                showLevel2(
+                    selectedCity
+                );
+            }
 
-    document.getElementById("stats")
-        .innerText =
-        "SQL data: " +
-        locations.length +
-        " locations | Total incidents: " +
-        total.toLocaleString();
-}
+            return;
+        }
 
+        if(currentLevel === 2){
+
+            showLevel1();
+        }
+    }
+);
 
 /* ============================================================
    RESET
    ============================================================ */
 
-document
-    .getElementById("resetBtn")
-    .addEventListener(
-        "click",
-        function () {
+document.getElementById(
+    "resetBtn"
+).addEventListener(
+    "click",
+    function(){
 
-            showLevel1();
+        showLevel1();
 
-            fitInitialView();
-
-        }
-    );
-
+        window.parent.postMessage(
+            {
+                type:"mapClick",
+                state:null,
+                lat:null,
+                long:null
+            },
+            "*"
+        );
+    }
+);
 
 /* ============================================================
-   INITIAL VIEW
+   HTML ESCAPE
    ============================================================ */
 
-function fitInitialView() {
+function escapeHtml(value){
 
-    const allPoints =
-        municipalities.map(
-            x => x.center
-        );
-
-    if (allPoints.length > 0) {
-
-        map.fitBounds(
-            L.latLngBounds(allPoints),
-            {
-                padding: [30, 30]
-            }
-        );
-
-    }
-
+    return String(value ?? "")
+        .replace(/&/g,"&amp;")
+        .replace(/</g,"&lt;")
+        .replace(/>/g,"&gt;")
+        .replace(/"/g,"&quot;")
+        .replace(/'/g,"&#039;");
 }
 
+/* ============================================================
+   RECEIVE GRAFANA QUERY DATA
+
+   IMPORTANT:
+   This is compatible with the original Grafana code that sends:
+
+      type: "incidentData"
+      data: incidentData
+
+   where incidentData contains:
+      state
+      lat
+      long
+      count
+   ============================================================ */
+
+window.addEventListener(
+    "message",
+    function(event){
+
+        if(!event.data) return;
+
+        if(
+            event.data.type ===
+            "incidentData"
+        ){
+
+            rawRows =
+                cleanRows(
+                    event.data.data || []
+                );
+
+            dataReady = true;
+
+            console.log(
+                "Incident rows received:",
+                rawRows.length
+            );
+
+            showLevel1();
+        }
+    }
+);
+
+/* ============================================================
+   READY HANDSHAKE
+
+   Grafana should send data after receiving this message.
+   ============================================================ */
+
+window.parent.postMessage(
+    {
+        type:"iframeReady"
+    },
+    "*"
+);
 
 /* ============================================================
    START
+
+   Load GeoJSON first. The map still works without it because
+   query coordinates are used as fallback geometry.
    ============================================================ */
 
-showLevel1();
+(async function(){
 
-fitInitialView();
+    await loadGeoJSON();
 
+    setHeader(
+        "LEVEL 1",
+        "Municipalities Overview"
+    );
+
+    setInstruction(
+        "ⓘ Waiting for Grafana query data"
+    );
+
+    map.setView(
+        [26.35,50.10],
+        10
+    );
+
+    /*
+       Send ready again after GeoJSON has loaded.
+       This avoids a race condition with Grafana iframe loading.
+    */
+    window.parent.postMessage(
+        {
+            type:"iframeReady"
+        },
+        "*"
+    );
+
+})();
 
 </script>
-
 </body>
 </html>
