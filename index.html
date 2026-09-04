@@ -529,28 +529,6 @@ body {
 
 
 <body>
-<div id="fast-loader">
-    <div class="fast-loader-text">Loading incident map…</div>
-</div>
-
-<style>
-#fast-loader{
-    position:fixed;
-    inset:0;
-    z-index:99999;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    background:rgba(5,10,8,.82);
-    color:#fff;
-    font:700 15px Arial,sans-serif;
-    pointer-events:none;
-    transition:opacity .18s ease;
-}
-#fast-loader.hide{opacity:0;}
-.fast-loader-text{padding:10px 16px;}
-</style>
-
 
 <div id="map"></div>
 
@@ -6201,7 +6179,9 @@ window.addEventListener(
         finalVisualLayer.clearLayers();
         finalLabelLayer.clearLayers();
         try { incidentHeatLayer.clearLayers(); } catch(e){}
+        try { if(map.hasLayer(incidentHeatLayer)) map.removeLayer(incidentHeatLayer); } catch(e){}
         try { heatLabelLayer.clearLayers(); } catch(e){}
+        try { if(map.hasLayer(heatLabelLayer)) map.removeLayer(heatLabelLayer); } catch(e){}
     }
 
     function hideAllDistrictLayers(){
@@ -6270,33 +6250,10 @@ window.addEventListener(
         };
     }
 
+    /* Heat overlay intentionally disabled.
+       The map now uses only geographic polygon colors + count labels. */
     function addHeat(items,color,radius,blur,opacity){
-        const points=(items||[]).filter(x=>
-            Number.isFinite(Number(x.lat)) &&
-            Number.isFinite(Number(x.lng)) &&
-            Number(x.count)>0
-        );
-        if(!points.length) return null;
-
-        /* Keep the heat rendering lightweight. leaflet.heat automatically
-           normalizes weights, so there is no need for Math.max(...array). */
-        const h=L.heatLayer(
-            points.map(x=>[
-                Number(x.lat),
-                Number(x.lng),
-                Math.max(1,Number(x.count))
-            ]),
-            {
-                radius:radius,
-                blur:blur,
-                minOpacity:opacity,
-                maxZoom:16,
-                gradient:heatGradient(color)
-            }
-        ).addTo(map);
-
-        finalHeatLayers.push(h);
-        return h;
+        return null;
     }
 
     function setMunicipalityStyle(city){
@@ -6572,43 +6529,7 @@ window.addEventListener(
             }
         });
 
-        /* Smooth heat surface over the actual district coordinates. */
-        /* Level 3 heat uses the same Green -> Yellow -> Red scale as the risk polygons. */
-        const districtPoints=rows
-            .filter(x=>
-                Number(x.count)>0 &&
-                Number.isFinite(Number(x.lat)) &&
-                Number.isFinite(Number(x.lng))
-            )
-            .map(x=>[
-                Number(x.lat),
-                Number(x.lng),
-                Math.max(1,Number(x.count))
-            ]);
-
-        if(districtPoints.length){
-            const riskHeat=L.heatLayer(
-                districtPoints,
-                {
-                    radius:40,
-                    blur:30,
-                    minOpacity:.16,
-                    maxZoom:17,
-                    gradient:{
-                        0.12:'#052e16',
-                        0.30:'#14532d',
-                        0.48:'#166534',
-                        0.62:'#ca8a04',
-                        0.76:'#eab308',
-                        0.88:'#b91c1c',
-                        1.00:'#ef4444'
-                    }
-                }
-            ).addTo(map);
-
-            finalHeatLayers.push(riskHeat);
-        }
-        finalHeatLayers.push(riskHeat);
+        /* No heat overlay at Level 3: district polygons carry the risk colors. */
 
         rows.forEach(item=>{
             makePlainLabel(item.lat,item.lng,Number(item.count||0).toLocaleString(),'heat-number-label',()=>{
