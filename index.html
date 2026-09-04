@@ -499,6 +499,13 @@ body {
 
 
 <style>
+/* ===== CLEAN UI / NO LOADING / NO HOVER COLOR CHANGE ===== */
+#loadingOverlay, #loading-overlay, .loading-overlay, .map-loading-overlay, [id*="loading"], [class*="loading-overlay"] {
+    display:none !important;
+    visibility:hidden !important;
+    opacity:0 !important;
+    pointer-events:none !important;
+}
 /* ===== FINAL 3-LEVEL VISUAL OVERRIDE ===== */
 .heat-number-label,
 .heat-number-label * {
@@ -529,6 +536,8 @@ body {
 
 
 <body>
+
+
 
 <div id="map"></div>
 
@@ -669,9 +678,9 @@ const incidentHeatLayer = L.heatLayer([], {
         0.85: "orange",
         1.00: "red"
     }
-}).addTo(map);
+});
 
-const heatLabelLayer = L.layerGroup().addTo(map);
+const heatLabelLayer = L.layerGroup();
 
 
 /* =========================================================
@@ -5456,44 +5465,10 @@ function addHeatCountLabel(item, title, onClick) {
 
 
 function renderHeatLevel(items, labelFor, onClickFor, radius) {
-    clearHeatVisuals();
-
-    const visible = (items || []).filter(item =>
-        Number.isFinite(item.lat) &&
-        Number.isFinite(item.lng) &&
-        Number(item.count) > 0
-    );
-
-    if (!visible.length) return;
-
-    const stats = calculateLayerRisk(visible);
-
-    incidentHeatLayer.setOptions({
-        radius: radius,
-        blur: Math.round(radius * 0.7857),
-        minOpacity: 0.35,
-        maxZoom: 13,
-        gradient: {
-            0.20: "blue",
-            0.35: "cyan",
-            0.50: "lime",
-            0.70: "yellow",
-            0.85: "orange",
-            1.00: "red"
-        }
-    });
-
-    incidentHeatLayer.setLatLngs(
-        visible.map(item => [
-            item.lat,
-            item.lng,
-            getHeatWeight(Number(item.count), stats)
-        ])
-    );
-
-    visible.forEach(item =>
-        addHeatCountLabel(item, labelFor(item), onClickFor(item))
-    );
+    /* Disabled intentionally: final 3-level map uses polygon colors only. */
+    try { incidentHeatLayer.setLatLngs([]); } catch(e) {}
+    try { map.removeLayer(incidentHeatLayer); } catch(e) {}
+    try { heatLabelLayer.clearLayers(); map.removeLayer(heatLabelLayer); } catch(e) {}
 }
 
 
@@ -6155,6 +6130,30 @@ window.addEventListener(
    ============================================================ */
 
 (function(){
+    // Remove every legacy loading overlay. The map must never show a loading screen.
+    function removeLegacyLoadingOverlays(){
+        try {
+            document.querySelectorAll('#loadingOverlay,#loading-overlay,.loading-overlay,.map-loading-overlay,[id*="loading"],[class*="loading-overlay"]').forEach(el=>el.remove());
+            document.querySelectorAll('body *').forEach(el=>{
+                const t=String(el.textContent||'').trim().toLowerCase();
+                if(t === 'loading incident map…' || t === 'loading incident map...' || t === 'loading incident map') el.remove();
+            });
+        } catch(e) {}
+        try {
+            if(window.parent && window.parent !== window){
+                const doc=window.parent.document;
+                doc.querySelectorAll('#loadingOverlay,#loading-overlay,.loading-overlay,.map-loading-overlay').forEach(el=>el.remove());
+                doc.querySelectorAll('body *').forEach(el=>{
+                    const t=String(el.textContent||'').trim().toLowerCase();
+                    if(t === 'loading incident map…' || t === 'loading incident map...' || t === 'loading incident map') el.remove();
+                });
+            }
+        } catch(e) {}
+    }
+    removeLegacyLoadingOverlays();
+    // One delayed cleanup is enough for a legacy overlay injected after page load.
+    try { setTimeout(removeLegacyLoadingOverlays, 250); } catch(e) {}
+
     const CITY_COLOR = {
         Dammam:  '#ef4444',
         Khobar:  '#facc15',
@@ -6179,9 +6178,9 @@ window.addEventListener(
         finalVisualLayer.clearLayers();
         finalLabelLayer.clearLayers();
         try { incidentHeatLayer.clearLayers(); } catch(e){}
-        try { if(map.hasLayer(incidentHeatLayer)) map.removeLayer(incidentHeatLayer); } catch(e){}
+        try { map.removeLayer(incidentHeatLayer); } catch(e){}
         try { heatLabelLayer.clearLayers(); } catch(e){}
-        try { if(map.hasLayer(heatLabelLayer)) map.removeLayer(heatLabelLayer); } catch(e){}
+        try { map.removeLayer(heatLabelLayer); } catch(e){}
     }
 
     function hideAllDistrictLayers(){
@@ -6250,8 +6249,7 @@ window.addEventListener(
         };
     }
 
-    /* Heat overlay intentionally disabled.
-       The map now uses only geographic polygon colors + count labels. */
+    /* Heat overlay disabled: use geographic polygon colors only. */
     function addHeat(items,color,radius,blur,opacity){
         return null;
     }
@@ -6267,7 +6265,7 @@ window.addEventListener(
             fillColor:color,
             fillOpacity:.22
         });
-        layer.off('click');
+        layer.off('mouseover').off('mouseout').off('click');
         layer.on('click',()=>showMunicipality(city));
     }
 
@@ -6358,7 +6356,7 @@ window.addEventListener(
             fillColor:color,
             fillOpacity:.34
         });
-        layer.off('click');
+        layer.off('mouseover').off('mouseout').off('click');
         layer.on('click',()=>showDistrictLevel(group,city));
         if(!map.hasLayer(layer)) layer.addTo(map);
     }
@@ -6393,11 +6391,16 @@ window.addEventListener(
 
     function addGroupHeatAndLabel(group,city,index){
         const items=group.items||[];
-        const color=GROUP_COLOR[index];
-        addHeat(items,color,48,34,.24);
+        const total=items.reduce((sum,x)=>sum+Number(x.count||0),0);
         const c=groupCentroid(items);
         if(c){
-            makePlainLabel(c.lat,c.lng,`Group ${index+1}`,'level-group-label',()=>showDistrictLevel(group,city));
+            makePlainLabel(
+                c.lat,
+                c.lng,
+                Number(total || 0).toLocaleString(),
+                'level-group-label',
+                ()=>showDistrictLevel(group,city)
+            );
         }
     }
 
@@ -6430,7 +6433,7 @@ window.addEventListener(
         });
 
         const bounds=L.featureGroup(CITIES.map(c=>municipalityBoundaryLayers[c]).filter(Boolean)).getBounds();
-        if(bounds.isValid()) map.fitBounds(bounds,{padding:[40,40],maxZoom:12});
+        if(bounds.isValid()) map.fitBounds(bounds,{padding:[40,40],maxZoom:12,animate:false});
 
         updateMapInfo('<b>LEVEL 1</b> — Municipalities &nbsp; | &nbsp; Click Dammam, Khobar or Dhahran');
         updateBackButton();
@@ -6466,16 +6469,16 @@ window.addEventListener(
 
         const boundary=municipalityBoundaryLayers[city];
         if(boundary && boundary.getBounds().isValid()){
-            map.fitBounds(boundary.getBounds(),{padding:[55,55],maxZoom:13});
+            map.fitBounds(boundary.getBounds(),{padding:[55,55],maxZoom:13,animate:false});
         }else{
             const pts=rows.map(x=>[x.lat,x.lng]);
-            if(pts.length) map.fitBounds(L.latLngBounds(pts),{padding:[55,55],maxZoom:14});
+            if(pts.length) map.fitBounds(L.latLngBounds(pts),{padding:[55,55],maxZoom:14,animate:false});
         }
 
-        updateMapInfo(`<b>LEVEL 2</b> — ${city} &nbsp; | &nbsp; 3 geographic groups &nbsp; | &nbsp; Centre number = group total`);
+        updateMapInfo(`<b>LEVEL 2</b> — ${city} &nbsp; | &nbsp; 3 geographic areas &nbsp; | &nbsp; Centre value = SUM of incidents`);
         updateBackButton();
         const title=document.querySelector('.map-title');
-        if(title) title.innerHTML=`${city} — 3 Geographic Groups`;
+        if(title) title.innerHTML=`${city} — 3 Areas`;
     }
 
     /* ================= LEVEL 3 ================= */
@@ -6511,7 +6514,7 @@ window.addEventListener(
             styleDistrictRisk(item.name,risk);
             const layer=districtLayers[item.name];
             if(layer){
-                layer.off('click');
+                layer.off('mouseover').off('mouseout').off('click');
                 layer.on('click',()=>{
                     window.parent.postMessage({
                         type:'mapClick',
@@ -6529,7 +6532,7 @@ window.addEventListener(
             }
         });
 
-        /* No heat overlay at Level 3: district polygons carry the risk colors. */
+        /* NO HEAT OVERLAY — keep only district polygon colors and count labels. */
 
         rows.forEach(item=>{
             makePlainLabel(item.lat,item.lng,Number(item.count||0).toLocaleString(),'heat-number-label',()=>{
@@ -6544,7 +6547,7 @@ window.addEventListener(
         });
 
         const pts=rows.map(x=>[x.lat,x.lng]);
-        if(pts.length) map.fitBounds(L.latLngBounds(pts),{padding:[75,75],maxZoom:16});
+        if(pts.length) map.fitBounds(L.latLngBounds(pts),{padding:[75,75],maxZoom:16,animate:false});
 
         updateMapInfo(`<b>LEVEL 3</b> — ${city} / Group ${(Number(group.index)||0)+1} &nbsp; | &nbsp; Actual Districts &nbsp; | &nbsp; Click a district`);
         updateBackButton();
